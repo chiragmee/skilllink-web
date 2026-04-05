@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Environment — never commit real secrets
+.env
+.env.local
+.env.production
+.env.staging
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Capacitor (generated — platform folders added after `npx cap add`)
+# android/
+# ios/
