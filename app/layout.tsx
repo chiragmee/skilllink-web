@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter, Plus_Jakarta_Sans } from 'next/font/google'
 import './globals.css'
 import ServerWakeBanner from '@/components/ServerWakeBanner'
@@ -21,12 +21,15 @@ export const metadata: Metadata = {
   title: 'SkillLink — Master any skill, right in your neighborhood',
   description: 'Connect with verified local experts for badminton, yoga, music, tech, and more.',
   manifest: '/manifest.json',
-  themeColor: '#24389c',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
     title: 'SkillLink',
   },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#24389c',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
