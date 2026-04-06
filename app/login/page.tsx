@@ -1,13 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 
 export default function LoginPage() {
   const { user, loading, signInWithGoogle } = useAuth()
   const router = useRouter()
+  const [authError, setAuthError] = useState('')
 
   useEffect(() => {
     if (!loading && user) {
@@ -21,6 +22,19 @@ export default function LoginPage() {
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
       </div>
     )
+  }
+
+  async function handleGoogleSignIn() {
+    setAuthError('')
+    try {
+      await signInWithGoogle()
+    } catch (caughtError) {
+      const message =
+        caughtError instanceof Error && caughtError.message
+          ? caughtError.message
+          : 'Unable to start Google sign in. Please try again.'
+      setAuthError(message)
+    }
   }
 
   return (
@@ -41,7 +55,7 @@ export default function LoginPage() {
         </div>
 
         <button
-          onClick={signInWithGoogle}
+          onClick={handleGoogleSignIn}
           className="mt-8 flex h-14 w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-900 transition hover:border-slate-300 hover:bg-slate-50"
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
@@ -64,6 +78,8 @@ export default function LoginPage() {
           </svg>
           Continue with Google
         </button>
+
+        {authError ? <p className="mt-3 text-center text-sm text-red-600">{authError}</p> : null}
 
         <p className="mt-6 text-center text-xs leading-5 text-slate-500">
           By continuing, you agree to our{' '}

@@ -49,12 +49,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   async function signInWithGoogle() {
-    await supabase.auth.signInWithOAuth({
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
+        skipBrowserRedirect: true,
       },
     })
+
+    if (error) {
+      throw error
+    }
+
+    if (!data?.url) {
+      throw new Error('Could not start Google sign in. Please try again.')
+    }
+
+    window.location.assign(data.url)
   }
 
   async function signOut() {
