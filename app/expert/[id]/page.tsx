@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import TopBar from '@/components/TopBar'
 import {
   getAvailableSlots,
   getExpert,
@@ -24,7 +23,7 @@ function addDays(date: Date, days: number) {
   return nextDate
 }
 
-const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const WEEKDAY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 export default function ExpertProfilePage() {
   const params = useParams<{ id: string }>()
@@ -42,19 +41,16 @@ export default function ExpertProfilePage() {
   const [slotsLoading, setSlotsLoading] = useState(false)
   const [slotsError, setSlotsError] = useState('')
 
-  const dateOptions = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(new Date(), index)), [])
+  const dateOptions = useMemo(() => Array.from({ length: 14 }, (_, index) => addDays(new Date(), index)), [])
 
   useEffect(() => {
     let mounted = true
-
     async function loadProfile() {
       setProfileLoading(true)
       setProfileError('')
-
       try {
         const [expertData, reviewsData] = await Promise.all([getExpert(expertId), getExpertReviews(expertId)])
         if (!mounted) return
-
         setExpert(expertData)
         setReviews(Array.isArray(reviewsData) ? reviewsData : [])
         setSelectedPricingId(expertData.pricing[0]?.id ?? '')
@@ -64,9 +60,7 @@ export default function ExpertProfilePage() {
         if (mounted) setProfileLoading(false)
       }
     }
-
     loadProfile()
-
     return () => {
       mounted = false
     }
@@ -74,12 +68,10 @@ export default function ExpertProfilePage() {
 
   useEffect(() => {
     let mounted = true
-
     async function loadSlots() {
       setSlotsLoading(true)
       setSlotsError('')
       setSelectedSlot(null)
-
       try {
         const slotData = await getAvailableSlots(expertId, selectedDate)
         if (!mounted) return
@@ -87,15 +79,13 @@ export default function ExpertProfilePage() {
       } catch {
         if (mounted) {
           setSlots([])
-          setSlotsError('Unable to load slots for this date. Please try another date.')
+          setSlotsError('Unable to load slots for this date.')
         }
       } finally {
         if (mounted) setSlotsLoading(false)
       }
     }
-
     loadSlots()
-
     return () => {
       mounted = false
     }
@@ -106,12 +96,9 @@ export default function ExpertProfilePage() {
       router.push('/login')
       return
     }
-
     if (!expert || !selectedPricingId || !selectedSlot) return
-
     const selectedPricing = expert.pricing.find((pricing) => pricing.id === selectedPricingId)
     if (!selectedPricing) return
-
     const query = new URLSearchParams({
       expertId,
       pricingId: selectedPricing.id,
@@ -123,7 +110,6 @@ export default function ExpertProfilePage() {
       amount: String(selectedPricing.amount),
       duration: String(selectedPricing.durationMins),
     })
-
     router.push(`/booking/confirm?${query.toString()}`)
   }
 
@@ -150,182 +136,184 @@ export default function ExpertProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-32">
-      <TopBar variant="back" backHref="/" title="Expert Profile" />
+    <div className="min-h-screen bg-[#f8f9fa] text-slate-900">
+      <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/85 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-[1280px] items-center justify-between px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-7">
+            <Link href="/" className="text-xl font-bold text-primary">SkillLink</Link>
+            <nav className="hidden items-center gap-5 text-xs font-medium text-slate-500 md:flex">
+              <Link href="/" className="hover:text-primary">Experts</Link>
+              <span>Badminton</span>
+              <span>Music</span>
+              <span>Fitness</span>
+            </nav>
+          </div>
+          <button className="rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-white">Book Now</button>
+        </div>
+      </header>
 
-      <main className="app-shell px-4 pb-24 pt-5 sm:px-6">
-        <section className="rounded-3xl bg-white p-5 shadow-card">
-          <div className="flex gap-4">
-            {expert.user.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={expert.user.avatarUrl}
-                alt={expert.user.name ?? 'Expert'}
-                className="h-20 w-20 rounded-2xl object-cover"
-              />
-            ) : (
-              <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-500">
-                <span className="material-symbols-outlined text-3xl">person</span>
+      <main className="mx-auto w-full max-w-[1280px] px-4 pb-16 pt-6 sm:px-6">
+        <section className="relative mb-10">
+          <div className="h-56 w-full rounded-2xl bg-indigo-100/60" />
+          <div className="-mt-12 flex flex-col gap-5 px-4 lg:flex-row lg:items-end">
+            <div className="h-24 w-24 overflow-hidden rounded-full border-4 border-white shadow-lg">
+              {expert.user.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={expert.user.avatarUrl} alt={expert.user.name ?? 'Expert'} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-indigo-100 text-indigo-500">
+                  <span className="material-symbols-outlined text-3xl">person</span>
+                </div>
+              )}
+            </div>
+            <div className="flex-1">
+              <h1 className="text-4xl font-extrabold tracking-tight">{expert.user.name ?? 'Expert'}</h1>
+              <p className="mt-1 text-lg text-slate-600">{getTopSkill(expert)}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+                <span className="rounded-full bg-amber-200 px-2 py-1 text-amber-900">★ {Number(expert.avgRating || 0).toFixed(1)}</span>
+                <span className="text-slate-500">({expert.totalReviews} Reviews)</span>
+                <span className="text-primary">{expert.city || 'Location not specified'}</span>
               </div>
+            </div>
+            <button className="rounded-xl bg-primary px-7 py-3 text-sm font-semibold text-white">Book a Session</button>
+          </div>
+        </section>
+
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-12">
+          <div className="space-y-8 lg:col-span-8">
+            <div className="flex gap-8 border-b border-slate-200">
+              <button className="border-b-2 border-primary pb-3 text-sm font-semibold text-primary">About</button>
+              <button className="pb-3 text-sm font-medium text-slate-500">Skills</button>
+              <button className="pb-3 text-sm font-medium text-slate-500">Reviews</button>
+            </div>
+
+            {expert.bio && (
+              <section>
+                <h2 className="text-2xl font-bold">Experience Harmony</h2>
+                <p className="mt-4 leading-7 text-slate-600">{expert.bio}</p>
+              </section>
             )}
 
-            <div className="min-w-0 flex-1">
-              <h1 className="text-xl font-semibold text-slate-900">{expert.user.name ?? 'Expert'}</h1>
-              <p className="mt-1 text-sm text-slate-600">{expert.city || 'Location not specified'}</p>
-
-              <div className="mt-2 flex flex-wrap gap-2">
-                <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold capitalize text-indigo-700">
-                  {expert.mode} sessions
-                </span>
-                <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
-                  {expert.totalReviews > 0
-                    ? `${Number(expert.avgRating).toFixed(1)} stars (${expert.totalReviews} reviews)`
-                    : 'No reviews yet'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {expert.bio && <p className="mt-4 text-sm leading-6 text-slate-600">{expert.bio}</p>}
-
-          {expert.expertSkills.length > 0 && (
-            <div className="mt-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Skills</p>
-              <div className="mt-2 flex flex-wrap gap-2">
+            <section>
+              <h2 className="text-2xl font-bold">Skills & Expertise</h2>
+              <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
                 {expert.expertSkills.map((skill) => (
-                  <span key={skill.id} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                    {skill.skill.name}
-                  </span>
+                  <div key={skill.id} className="rounded-xl bg-slate-100 p-4">
+                    <p className="text-sm font-semibold">{skill.skill.name}</p>
+                    <p className="mt-1 text-xs text-slate-500">{skill.proficiency}</p>
+                  </div>
                 ))}
               </div>
-            </div>
-          )}
-        </section>
+            </section>
 
-        <section className="mt-6">
-          <h2 className="text-lg font-semibold text-slate-900">Choose Pricing</h2>
-          <div className="mt-3 grid gap-3">
-            {expert.pricing.map((pricing) => (
-              <button
-                key={pricing.id}
-                onClick={() => setSelectedPricingId(pricing.id)}
-                className={`rounded-2xl border p-4 text-left shadow-card transition ${
-                  selectedPricingId === pricing.id ? 'border-primary bg-indigo-50' : 'border-slate-200 bg-white'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">{pricing.skill.name}</p>
-                    <p className="text-xs text-slate-500">
-                      {pricing.type === 'package'
-                        ? `${pricing.sessions ?? 1} sessions · ${pricing.durationMins} min each`
-                        : `${pricing.durationMins} min session`}
-                    </p>
-                  </div>
-                  <p className="text-lg font-semibold text-slate-900">Rs {(pricing.amount / 100).toLocaleString('en-IN')}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="mt-6">
-          <h2 className="text-lg font-semibold text-slate-900">Select Date</h2>
-          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-            {dateOptions.map((date) => {
-              const dateKey = toDateKey(date)
-              const selected = selectedDate === dateKey
-
-              return (
-                <button
-                  key={dateKey}
-                  onClick={() => setSelectedDate(dateKey)}
-                  className={`min-w-[66px] rounded-2xl px-3 py-3 text-center ${
-                    selected ? 'bg-primary text-white' : 'bg-white text-slate-700 shadow-card'
-                  }`}
-                >
-                  <p className="text-xs font-semibold">{WEEKDAY[date.getDay()]}</p>
-                  <p className="mt-0.5 text-lg font-semibold">{date.getDate()}</p>
-                </button>
-              )
-            })}
-          </div>
-        </section>
-
-        <section className="mt-6">
-          <h2 className="text-lg font-semibold text-slate-900">Available Time Slots</h2>
-
-          {slotsLoading && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {[1, 2, 3, 4].map((slot) => (
-                <div key={slot} className="h-11 w-28 animate-pulse rounded-xl bg-slate-200" />
-              ))}
-            </div>
-          )}
-
-          {!slotsLoading && slotsError && (
-            <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-4">
-              <p className="text-sm font-medium text-red-700">{slotsError}</p>
-            </div>
-          )}
-
-          {!slotsLoading && !slotsError && slots.length === 0 && (
-            <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-sm text-slate-600">No slots available on this date. Choose another date to continue.</p>
-            </div>
-          )}
-
-          {!slotsLoading && !slotsError && slots.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {slots.map((slot, index) => {
-                const key = `${slot.startTime}-${slot.endTime}-${index}`
-                const active = selectedSlot?.startTime === slot.startTime && selectedSlot?.endTime === slot.endTime
-
-                return (
+            <section>
+              <h2 className="text-2xl font-bold">Session Packs</h2>
+              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                {expert.pricing.map((pricing) => (
                   <button
-                    key={key}
-                    onClick={() => setSelectedSlot({ startTime: slot.startTime, endTime: slot.endTime })}
-                    className={`rounded-xl border px-3 py-2 text-sm font-semibold ${
-                      active ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-700'
+                    key={pricing.id}
+                    onClick={() => setSelectedPricingId(pricing.id)}
+                    className={`rounded-xl border p-5 text-left shadow-sm ${
+                      selectedPricingId === pricing.id ? 'border-primary bg-indigo-50' : 'border-slate-200 bg-white'
                     }`}
                   >
-                    {slot.startTime} - {slot.endTime}
+                    <p className="text-lg font-bold">{pricing.type === 'package' ? 'Package' : 'Session Pack'}</p>
+                    <p className="mt-1 text-sm text-slate-500">{pricing.durationMins} minutes</p>
+                    <p className="mt-4 text-4xl font-extrabold">Rs {(pricing.amount / 100).toLocaleString('en-IN')}</p>
+                    <span className="mt-5 inline-block rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-white">
+                      Select Pack
+                    </span>
                   </button>
-                )
-              })}
-            </div>
-          )}
-        </section>
+                ))}
+              </div>
+            </section>
 
-        {reviews.length > 0 && (
-          <section className="mt-6">
-            <h2 className="text-lg font-semibold text-slate-900">Recent Reviews</h2>
-            <div className="mt-3 space-y-3">
-              {reviews.slice(0, 4).map((review) => (
-                <div key={review.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-slate-900">{review.reviewer.name || 'Learner'}</p>
-                    <p className="text-xs font-semibold text-amber-600">{review.rating}/5</p>
-                  </div>
-                  {review.comment && <p className="mt-2 text-sm text-slate-600">{review.comment}</p>}
+            {reviews.length > 0 && (
+              <section>
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-2xl font-bold">Recent Testimonials</h2>
+                  <button className="text-sm font-semibold text-primary">View All</button>
                 </div>
-              ))}
-            </div>
-          </section>
-        )}
-      </main>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {reviews.slice(0, 2).map((review) => (
+                    <article key={review.id} className="rounded-xl bg-slate-100 p-4">
+                      <p className="text-sm font-semibold">{review.reviewer.name || 'Learner'}</p>
+                      <p className="mt-2 text-sm italic text-slate-600">{review.comment || 'Great session and clear guidance.'}</p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
 
-      <div className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white p-4">
-        <div className="app-shell">
-          <button
-            onClick={handleBookSession}
-            disabled={!selectedPricingId || !selectedSlot}
-            className="w-full rounded-2xl bg-primary px-4 py-4 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {!user ? 'Sign in to book' : 'Book This Session'}
-          </button>
+          <aside className="lg:col-span-4">
+            <div className="sticky top-24 rounded-2xl bg-white p-6 shadow-[0_20px_40px_rgba(25,28,29,0.06)]">
+              <h3 className="text-xl font-bold">Check Availability</h3>
+              <div className="mt-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-sm font-semibold">Upcoming Days</span>
+                </div>
+                <div className="grid grid-cols-7 gap-1 text-center">
+                  {dateOptions.slice(0, 14).map((date) => {
+                    const key = toDateKey(date)
+                    const active = selectedDate === key
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => setSelectedDate(key)}
+                        className={`rounded-md py-1 text-[11px] ${active ? 'bg-primary text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                      >
+                        {WEEKDAY[date.getDay() === 0 ? 6 : date.getDay() - 1].slice(0, 1)}
+                        <br />
+                        {date.getDate()}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-5">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Available Slots</p>
+                {slotsLoading && <p className="text-sm text-slate-500">Loading slots...</p>}
+                {!slotsLoading && slotsError && <p className="text-sm text-red-600">{slotsError}</p>}
+                {!slotsLoading && !slotsError && slots.length === 0 && <p className="text-sm text-slate-500">No slots available.</p>}
+                <div className="space-y-2">
+                  {!slotsLoading &&
+                    !slotsError &&
+                    slots.map((slot, index) => {
+                      const key = `${slot.startTime}-${slot.endTime}-${index}`
+                      const active = selectedSlot?.startTime === slot.startTime && selectedSlot?.endTime === slot.endTime
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => setSelectedSlot({ startTime: slot.startTime, endTime: slot.endTime })}
+                          className={`w-full rounded-lg border px-3 py-2 text-sm font-semibold ${
+                            active ? 'border-primary bg-primary text-white' : 'border-slate-200 text-slate-700'
+                          }`}
+                        >
+                          {slot.startTime} - {slot.endTime}
+                        </button>
+                      )
+                    })}
+                </div>
+              </div>
+
+              <button
+                onClick={handleBookSession}
+                disabled={!selectedPricingId || !selectedSlot}
+                className="mt-5 w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {!user ? 'Sign in to book' : 'Confirm Booking'}
+              </button>
+              <p className="mt-3 text-center text-xs text-slate-500">Free cancellation up to 24h before session</p>
+            </div>
+          </aside>
         </div>
-      </div>
+      </main>
     </div>
   )
+}
+
+function getTopSkill(expert: Expert) {
+  return expert.expertSkills[0]?.skill.name ?? 'Skill Coach'
 }

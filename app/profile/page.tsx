@@ -1,114 +1,75 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import BottomNav from '@/components/BottomNav'
 import TopBar from '@/components/TopBar'
 import { useAuth } from '@/lib/auth-context'
 
 export default function ProfilePage() {
-  const { user, loading, signOut } = useAuth()
-
   const router = useRouter()
-
-  async function handleSignOut() {
-    try { await signOut() } catch {}
-    router.replace('/login')
-  }
+  const { user, loading, signOut } = useAuth()
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login')
-  }, [user, loading, router])
+  }, [loading, router, user])
 
-  if (loading || !user) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin"/>
-    </div>
-  )
+  async function handleSignOut() {
+    try {
+      await signOut()
+    } catch {}
+  }
+
+  if (loading || !user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
+      </div>
+    )
+  }
 
   return (
-    <div className="bg-surface min-h-screen pb-28">
-      <TopBar variant="back" />
-      <main className="mt-16 max-w-lg mx-auto px-4">
-        <div className="bg-white rounded-3xl p-6 mt-4 border border-zinc-100 flex items-center gap-4">
-          <div className="w-16 h-16 flex-shrink-0">
+    <div className="min-h-screen bg-background">
+      <TopBar variant="back" backHref="/" title="Profile" />
+
+      <main className="mx-auto mt-5 w-full max-w-xl px-4 pb-10 sm:px-6">
+        <section className="rounded-3xl bg-white p-6 shadow-card">
+          <div className="flex items-center gap-4">
             {user.avatarUrl ? (
-              <img src={user.avatarUrl} alt={user.name||''} className="w-full h-full object-cover rounded-2xl"/>
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={user.avatarUrl} alt={user.name ?? 'User'} className="h-16 w-16 rounded-2xl object-cover" />
             ) : (
-              <div className="w-full h-full bg-indigo-100 rounded-2xl flex items-center justify-center">
-                <span className="material-symbols-outlined text-indigo-400 text-3xl">person</span>
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-500">
+                <span className="material-symbols-outlined text-3xl">person</span>
               </div>
             )}
-          </div>
-          <div>
-            <h1 className="text-xl font-bold">{user.name || 'User'}</h1>
-            <p className="text-zinc-500 text-sm">{user.email}</p>
-            <span className="inline-block mt-1 bg-indigo-50 text-indigo-700 text-xs font-semibold px-2 py-0.5 rounded-lg capitalize">{user.role}</span>
-          </div>
-        </div>
 
-        <div className="mt-4 bg-white rounded-3xl border border-zinc-100 overflow-hidden">
-          {!user.expertProfileId && (
-            <Link href="/register-expert" className="flex items-center justify-between p-5 hover:bg-zinc-50 transition-colors border-b border-zinc-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
-                  <span className="material-symbols-outlined text-indigo-600">workspace_premium</span>
-                </div>
-                <div>
-                  <p className="font-semibold">Become an Expert</p>
-                  <p className="text-zinc-400 text-xs">List your skills and start earning</p>
-                </div>
-              </div>
-              <span className="material-symbols-outlined text-zinc-400">chevron_right</span>
+            <div>
+              <h1 className="text-xl font-semibold text-slate-900">{user.name ?? 'User'}</h1>
+              <p className="text-sm text-slate-500">{user.email}</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-4 space-y-3 rounded-3xl bg-white p-4 shadow-card">
+          {user.expertProfileId ? (
+            <Link href="/dashboard" className="block rounded-xl bg-indigo-50 px-4 py-3 text-sm font-semibold text-primary">
+              Expert Dashboard
+            </Link>
+          ) : (
+            <Link href="/register-expert" className="block rounded-xl bg-indigo-50 px-4 py-3 text-sm font-semibold text-primary">
+              Become an Expert
             </Link>
           )}
-          {user.expertProfileId && (
-            <Link href="/dashboard" className="flex items-center justify-between p-5 hover:bg-zinc-50 transition-colors border-b border-zinc-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                  <span className="material-symbols-outlined text-green-600">dashboard</span>
-                </div>
-                <p className="font-semibold">Expert Dashboard</p>
-              </div>
-              <span className="material-symbols-outlined text-zinc-400">chevron_right</span>
-            </Link>
-          )}
-          <Link href="/bookings" className="flex items-center justify-between p-5 hover:bg-zinc-50 transition-colors border-b border-zinc-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <span className="material-symbols-outlined text-blue-600">calendar_month</span>
-              </div>
-              <p className="font-semibold">My Bookings</p>
-            </div>
-            <span className="material-symbols-outlined text-zinc-400">chevron_right</span>
-          </Link>
-          <Link href="/terms-of-service" className="flex items-center justify-between p-5 hover:bg-zinc-50 transition-colors border-b border-zinc-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-zinc-100 rounded-xl flex items-center justify-center">
-                <span className="material-symbols-outlined text-zinc-600">gavel</span>
-              </div>
-              <p className="font-semibold">Terms of Service</p>
-            </div>
-            <span className="material-symbols-outlined text-zinc-400">chevron_right</span>
-          </Link>
-          <Link href="/privacy-policy" className="flex items-center justify-between p-5 hover:bg-zinc-50 transition-colors">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-zinc-100 rounded-xl flex items-center justify-center">
-                <span className="material-symbols-outlined text-zinc-600">privacy_tip</span>
-              </div>
-              <p className="font-semibold">Privacy Policy</p>
-            </div>
-            <span className="material-symbols-outlined text-zinc-400">chevron_right</span>
-          </Link>
-        </div>
 
-        <button onClick={handleSignOut}
-          className="mt-4 w-full py-4 bg-red-50 text-red-600 font-bold rounded-2xl border border-red-200 hover:bg-red-100 transition-colors">
-          Sign Out
-        </button>
+          <button
+            onClick={handleSignOut}
+            className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"
+          >
+            Sign Out
+          </button>
+        </section>
       </main>
-      <BottomNav mode={user.expertProfileId ? 'expert' : 'learner'} />
     </div>
   )
 }

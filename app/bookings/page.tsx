@@ -1,31 +1,38 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import BottomNav from '@/components/BottomNav'
-import TopBar from '@/components/TopBar'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Toast from '@/components/Toast'
-import { listBookings, cancelBooking, completeBooking, submitReview, type Booking } from '@/lib/api'
+import { cancelBooking, listBookings, submitReview, type Booking } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 
+type BookingTab = 'all' | 'upcoming' | 'completed'
+
 const STATUS_LABEL: Record<string, string> = {
-  requested: 'Requested',
   accepted: 'Awaiting Payment',
   pending_payment: 'Payment Pending',
   confirmed: 'Confirmed',
   completed: 'Completed',
   cancelled: 'Cancelled',
-  no_show: 'No Show',
+  requested: 'Requested',
 }
 
-const STATUS_COLORS: Record<string, string> = {
+const STATUS_BADGE: Record<string, string> = {
   accepted: 'bg-blue-100 text-blue-700',
   pending_payment: 'bg-yellow-100 text-yellow-700',
-  confirmed: 'bg-green-100 text-green-700',
-  completed: 'bg-zinc-100 text-zinc-600',
-  cancelled: 'bg-red-100 text-red-600',
-  no_show: 'bg-orange-100 text-orange-700',
+  confirmed: 'bg-indigo-100 text-indigo-700',
+  completed: 'bg-green-100 text-green-700',
+  cancelled: 'bg-red-100 text-red-700',
+  requested: 'bg-slate-100 text-slate-700',
+}
+
+function formatDate(slotDate: string) {
+  return new Date(slotDate).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
 }
 
 export default function BookingsPage() {
@@ -33,237 +40,286 @@ export default function BookingsPage() {
   const router = useRouter()
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
-  const [fetchError, setFetchError] = useState('')
-  const [tab, setTab] = useState<'all' | 'upcoming' | 'completed'>('all')
-  const [reviewBookingId, setReviewBookingId] = useState<string | null>(null)
+  const [error, setError] = useState('')
+  const [tab, setTab] = useState<BookingTab>('upcoming')
   const [cancelBookingId, setCancelBookingId] = useState<string | null>(null)
-  const [reviewRating, setReviewRating] = useState(5)
+  const [reviewBookingId, setReviewBookingId] = useState<string | null>(null)
+  const [rating, setRating] = useState(5)
   const [reviewComment, setReviewComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null)
 
-  const fetchBookings = useCallback(async () => {
-    setFetchError('')
+  const loadBookings = useCallback(async () => {
+    setError('')
     try {
       const data = await listBookings('learner')
       setBookings(Array.isArray(data) ? data : [])
     } catch {
-      setFetchError('Could not load your bookings. Please try again.')
+      setError('Could not load your bookings right now. Please try again.')
+      setBookings([])
     } finally {
       setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    if (!authLoading && !user) { router.replace('/login'); return }
-    if (user) fetchBookings()
-  }, [user, authLoading, router, fetchBookings])
+    if (!authLoading && !user) {
+      router.replace('/login')
+      return
+    }
+    if (user) loadBookings()
+  }, [authLoading, loadBookings, router, user])
 
-  const filtered = bookings.filter(b => {
-    if (tab === 'upcoming') return ['accepted', 'pending_payment', 'confirmed'].includes(b.status)
-    if (tab === 'completed') return ['completed', 'cancelled'].includes(b.status)
-    return true
-  })
-
-  async function handleCancel(id: string) {
-    setCancelBookingId(id)
-  }
+  const filtered = useMemo(() => {
+    if (tab === 'upcoming') return bookings.filter((booking) => ['accepted', 'pending_payment', 'confirmed'].includes(booking.status))
+    if (tab === 'completed') return bookings.filter((booking) => ['completed', 'cancelled'].includes(booking.status))
+    return bookings
+  }, [bookings, tab])
 
   async function confirmCancel() {
     if (!cancelBookingId) return
-    const id = cancelBookingId
-    setCancelBookingId(null)
     setSubmitting(true)
+
     try {
-      await cancelBooking(id, 'Cancelled by learner')
-      setBookings(prev => prev.map(b => b.id === id ? { ...b, status: 'cancelled' } : b))
+      await cancelBooking(cancelBookingId, 'Cancelled by learner')
       setToast({ message: 'Booking cancelled successfully.', type: 'info' })
-    } catch (err: any) {
-      setToast({ message: err.message || 'Could not cancel booking. Please try again.', type: 'error' })
+      setCancelBookingId(null)
+      await loadBookings()
+    } catch {
+      setToast({ message: 'We could not cancel this booking. Please try again.', type: 'error' })
     } finally {
       setSubmitting(false)
     }
   }
 
-  async function handleReview() {
+  async function submitBookingReview() {
     if (!reviewBookingId) return
-    if (reviewRating < 1 || reviewRating > 5) {
-      setToast({ message: 'Please select a rating between 1 and 5.', type: 'error' })
-      return
-    }
     setSubmitting(true)
+
     try {
-      await submitReview({ bookingId: reviewBookingId, rating: reviewRating, comment: reviewComment.trim() })
-      await fetchBookings()
+      await submitReview({
+        bookingId: reviewBookingId,
+        rating,
+        comment: reviewComment.trim() || undefined,
+      })
+      setToast({ message: 'Review submitted. Thank you!', type: 'success' })
       setReviewBookingId(null)
-      setToast({ message: 'Review submitted! Thank you.', type: 'success' })
-    } catch (err: any) {
-      setToast({ message: err.message || 'Could not submit review. Please try again.', type: 'error' })
+      setRating(5)
+      setReviewComment('')
+      await loadBookings()
+    } catch {
+      setToast({ message: 'Could not submit review. Please try again.', type: 'error' })
     } finally {
       setSubmitting(false)
     }
   }
 
-  if (loading || authLoading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-    </div>
-  )
+  if (authLoading || loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
+      </div>
+    )
+  }
 
   return (
-    <div className="bg-surface min-h-screen pb-28">
+    <div className="min-h-screen bg-background">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      <TopBar variant="back" />
-      <main className="mt-16 max-w-2xl mx-auto px-4">
-        <h1 className="text-2xl font-bold mt-6 mb-4">My Bookings</h1>
 
-        {/* Tabs */}
-        <div className="flex gap-2 mb-6">
-          {(['all', 'upcoming', 'completed'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)}
-              className={'px-4 py-2 rounded-xl font-semibold text-sm capitalize transition-colors ' +
-                (tab === t ? 'bg-primary text-white' : 'bg-white border border-zinc-200 text-on-surface-variant')}>
-              {t}
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
+        <div className="app-shell flex items-center justify-between px-4 py-4 sm:px-6">
+          <div className="flex items-center gap-7">
+            <Link href="/" className="text-2xl font-bold text-primary">
+              SkillLink
+            </Link>
+            <nav className="hidden items-center gap-5 text-sm text-slate-500 md:flex">
+              <Link href="/" className="hover:text-primary">Experts</Link>
+              <span>Badminton</span>
+              <span>Music</span>
+              <span>Fitness</span>
+            </nav>
+          </div>
+          <button className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white">Book Now</button>
+        </div>
+      </header>
+
+      <main className="app-shell px-4 py-10 sm:px-6">
+        <section className="mb-8">
+          <h1 className="text-5xl font-bold tracking-tight text-slate-900">My Bookings</h1>
+          <p className="mt-3 max-w-2xl text-slate-600">
+            Manage your upcoming sessions and review your past learning journey with our world-class experts.
+          </p>
+        </section>
+
+        <div className="mb-7 flex gap-8 border-b border-slate-200">
+          {(['upcoming', 'completed', 'all'] as BookingTab[]).map((item) => (
+            <button
+              key={item}
+              onClick={() => setTab(item)}
+              className={`pb-3 text-sm font-semibold capitalize ${
+                tab === item ? 'border-b-2 border-primary text-primary' : 'text-slate-500'
+              }`}
+            >
+              {item === 'all' ? 'All' : item}
             </button>
           ))}
         </div>
 
-        {/* Error */}
-        {fetchError && (
-          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-4 flex items-center justify-between">
-            <p className="text-red-700 text-sm">{fetchError}</p>
-            <button onClick={fetchBookings} className="text-red-600 font-semibold text-sm ml-4">Retry</button>
+        {error && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4">
+            <p className="text-sm text-red-700">{error}</p>
+            <button onClick={loadBookings} className="mt-2 text-sm font-semibold text-red-700 underline">
+              Retry
+            </button>
           </div>
         )}
 
-        {/* Empty state */}
-        {filtered.length === 0 && !fetchError ? (
-          <div className="text-center py-16 text-on-surface-variant">
-            <span className="material-symbols-outlined text-5xl mb-4 block">calendar_today</span>
-            <p className="font-semibold text-lg">
-              {tab === 'upcoming' ? 'No upcoming sessions' :
-               tab === 'completed' ? 'No completed sessions yet' : 'No bookings yet'}
-            </p>
-            <p className="text-sm mt-2 text-zinc-400">
-              {tab !== 'completed' ? 'Find an expert and book your first session' : 'Completed sessions will appear here'}
-            </p>
-            {tab !== 'completed' && (
-              <Link href="/" className="inline-block mt-4 px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold">
-                Find an Expert
-              </Link>
-            )}
+        {!error && filtered.length === 0 && (
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-card">
+            <h2 className="text-lg font-semibold text-slate-900">No bookings to show</h2>
+            <p className="mt-1 text-sm text-slate-500">Your sessions will appear here once you book an expert.</p>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {filtered.map(b => {
-              const expertName = b.expert?.user.name || 'Expert'
-              const slotDate = new Date(b.slotDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-              const needsPayment = b.status === 'accepted' || b.status === 'pending_payment'
+        )}
+
+        {!error && filtered.length > 0 && (
+          <div className="grid gap-6 md:grid-cols-2">
+            {filtered.map((booking) => {
+              const needsPayment = booking.status === 'accepted' || booking.status === 'pending_payment'
+              const canCancel = ['accepted', 'pending_payment', 'confirmed'].includes(booking.status)
+              const canReview = booking.status === 'completed'
+              const statusLabel = STATUS_LABEL[booking.status] ?? booking.status
+
               return (
-                <div key={b.id} className="bg-white rounded-2xl p-5 border border-zinc-100">
-                  <div className="flex justify-between items-start mb-3">
+                <article key={booking.id} className="rounded-xl border border-slate-200 bg-white p-6 shadow-card">
+                  <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="font-bold text-lg">{expertName}</p>
-                      <p className="text-zinc-500 text-sm">{slotDate} · {b.slotStart} – {b.slotEnd}</p>
+                      <h3 className="text-2xl font-bold text-slate-900">{booking.expert?.user.name ?? 'Expert'}</h3>
+                      <p className="mt-1 text-sm font-medium text-primary">
+                        {booking.pricing?.type === 'package' ? 'Package Session' : 'Single Session'}
+                      </p>
                     </div>
-                    <span className={'text-xs font-semibold px-3 py-1 rounded-full ' + (STATUS_COLORS[b.status] || 'bg-zinc-100 text-zinc-600')}>
-                      {STATUS_LABEL[b.status] || b.status}
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_BADGE[booking.status] ?? 'bg-slate-100 text-slate-700'}`}>
+                      {statusLabel}
                     </span>
                   </div>
-                  {b.pricing && (
-                    <p className="text-sm text-zinc-500 mb-3">
-                      {b.pricing.type === 'hourly' ? 'Per Session' : 'Package'} · ₹{(b.pricing.amount / 100).toLocaleString('en-IN')} · {b.pricing.durationMins} min
-                    </p>
-                  )}
-                  <div className="flex gap-2 flex-wrap">
+
+                  <p className="mt-4 text-sm text-slate-600">
+                    {formatDate(booking.slotDate)} • {booking.slotStart} - {booking.slotEnd}
+                  </p>
+
+                  <p className="mt-2 text-sm text-slate-500">
+                    {booking.pricing
+                      ? `${booking.pricing.type === 'package' ? 'Package' : 'Per Session'} • Rs ${(booking.pricing.amount / 100).toLocaleString('en-IN')} • ${booking.pricing.durationMins} min`
+                      : 'Pricing details unavailable'}
+                  </p>
+
+                  <div className="mt-6 flex flex-wrap gap-2">
                     {needsPayment && (
-                      <Link href={'/booking/confirm?' + new URLSearchParams({
-                        bookingId: b.id,
-                        expertId: b.expertId,
-                        pricingId: b.pricingId,
-                        date: new Date(b.slotDate).toISOString().split('T')[0],
-                        start: b.slotStart, end: b.slotEnd, mode: b.mode,
-                        expertName: b.expert?.user?.name || 'Expert',
-                        amount: String(b.pricing?.amount || 0),
-                        duration: String(b.pricing?.durationMins || 60),
-                      }).toString()}
-                        className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-semibold flex items-center gap-1">
-                        <span className="material-symbols-outlined text-sm">payments</span>
+                      <Link
+                        href={`/booking/confirm?bookingId=${booking.id}`}
+                        className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white"
+                      >
                         Complete Payment
                       </Link>
                     )}
-                    {b.status === 'completed' && (
-                      <button onClick={() => { setReviewBookingId(b.id); setReviewRating(5); setReviewComment('') }}
-                        className="px-4 py-2 bg-amber-50 text-amber-700 rounded-xl text-sm font-semibold border border-amber-200">
+                    {canReview && (
+                      <button
+                        onClick={() => {
+                          setReviewBookingId(booking.id)
+                          setRating(5)
+                          setReviewComment('')
+                        }}
+                        className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700"
+                      >
                         Leave Review
                       </button>
                     )}
-                    {['accepted', 'pending_payment', 'confirmed'].includes(b.status) && (
-                      <button onClick={() => handleCancel(b.id)} disabled={submitting}
-                        className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-sm font-semibold border border-red-200 disabled:opacity-50">
+                    {canCancel && (
+                      <button
+                        onClick={() => setCancelBookingId(booking.id)}
+                        className="rounded-xl border border-red-300 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700"
+                      >
                         Cancel
                       </button>
                     )}
                   </div>
-                </div>
+                </article>
               )
             })}
           </div>
         )}
       </main>
 
-      {/* Cancel confirmation modal */}
       {cancelBookingId && (
-        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl w-full max-w-lg p-6">
-            <h2 className="font-bold text-xl mb-1">Cancel Booking?</h2>
-            <p className="text-zinc-500 text-sm mb-6">This action cannot be undone. Are you sure you want to cancel this session?</p>
-            <div className="flex gap-3">
-              <button onClick={() => setCancelBookingId(null)} disabled={submitting}
-                className="flex-1 py-3 border border-zinc-200 rounded-xl font-semibold text-sm">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl">
+            <h2 className="text-xl font-semibold text-slate-900">Cancel Booking?</h2>
+            <p className="mt-2 text-sm text-slate-500">
+              This will cancel your upcoming session. You can book another slot anytime.
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => setCancelBookingId(null)}
+                className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
+              >
                 Keep Booking
               </button>
-              <button onClick={confirmCancel} disabled={submitting}
-                className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold text-sm disabled:opacity-60">
-                {submitting ? 'Cancelling…' : 'Yes, Cancel'}
+              <button
+                onClick={confirmCancel}
+                disabled={submitting}
+                className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {submitting ? 'Cancelling...' : 'Yes, Cancel'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Review modal */}
       {reviewBookingId && (
-        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl w-full max-w-lg p-6">
-            <h2 className="font-bold text-xl mb-1">Leave a Review</h2>
-            <p className="text-zinc-400 text-sm mb-4">How was your session?</p>
-            <div className="flex gap-3 mb-4">
-              {[1, 2, 3, 4, 5].map(n => (
-                <button key={n} onClick={() => setReviewRating(n)}
-                  className={'text-3xl transition-transform ' + (n <= reviewRating ? 'text-amber-400 scale-110' : 'text-zinc-200')}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl">
+            <h2 className="text-xl font-semibold text-slate-900">Leave Review</h2>
+            <p className="mt-1 text-sm text-slate-500">How was your session experience?</p>
+
+            <div className="mt-4 flex gap-2">
+              {[1, 2, 3, 4, 5].map((value) => (
+                <button
+                  key={value}
+                  onClick={() => setRating(value)}
+                  className={`text-3xl ${value <= rating ? 'text-amber-400' : 'text-slate-200'}`}
+                >
                   ★
                 </button>
               ))}
             </div>
-            <textarea value={reviewComment} onChange={e => setReviewComment(e.target.value)}
-              placeholder="Share your experience (optional)…" rows={3} maxLength={500}
-              className="w-full border border-zinc-200 rounded-xl p-3 text-sm mb-4 outline-none focus:border-primary resize-none" />
-            <div className="flex gap-3">
-              <button onClick={() => setReviewBookingId(null)} disabled={submitting}
-                className="flex-1 py-3 border border-zinc-200 rounded-xl font-semibold text-sm">
+
+            <textarea
+              value={reviewComment}
+              onChange={(event) => setReviewComment(event.target.value)}
+              placeholder="Share your feedback (optional)"
+              rows={4}
+              className="mt-4 w-full rounded-xl border border-slate-200 p-3 text-sm outline-none focus:border-primary"
+            />
+
+            <div className="mt-5 flex gap-3">
+              <button
+                onClick={() => setReviewBookingId(null)}
+                className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
+              >
                 Cancel
               </button>
-              <button onClick={handleReview} disabled={submitting}
-                className="flex-1 py-3 bg-primary text-white rounded-xl font-semibold text-sm disabled:opacity-60">
-                {submitting ? 'Submitting…' : 'Submit Review'}
+              <button
+                onClick={submitBookingReview}
+                disabled={submitting}
+                className="flex-1 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {submitting ? 'Submitting...' : 'Submit Review'}
               </button>
             </div>
           </div>
         </div>
       )}
-
-      <BottomNav mode="learner" />
     </div>
   )
 }
