@@ -75,7 +75,16 @@ async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
     if (!envelope.success) {
       throw new Error(getErrorMessage(envelope, 'Something went wrong. Please try again.'))
     }
-    return envelope.data as T
+
+    // Most endpoints return { success, data }, but auth endpoints return
+    // { success, accessToken, user, ... } at the top level.
+    if ('data' in envelope) {
+      return envelope.data as T
+    }
+
+    const topLevel = payload as Record<string, unknown>
+    const { success: _success, message: _message, error: _error, ...rest } = topLevel
+    return rest as T
   }
 
   return payload as T
