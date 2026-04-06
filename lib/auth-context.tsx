@@ -53,8 +53,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(data.user)
     } catch (err) {
       console.error('[Auth] Token exchange error:', err)
-      setUser(null)
-      setToken(null)
+      // Never evict an existing valid session just because re-exchange failed
+      // (e.g. backend temporarily unreachable on cold start)
+      const existing = localStorage.getItem('skilllink_user')
+      if (!existing) {
+        setUser(null)
+        setToken(null)
+      }
     } finally {
       setLoading(false)
     }
@@ -96,12 +101,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === 'SIGNED_IN' && session) {
-          await exchangeToken(session.access_token)
+          // Only exchange if we don't already have a valid JWT
+          // Avoids unnecessary re-exchange on every page load (INITIAL_SESSION)
+          const existingJwt = localStorage.getItem('skilllink_token')
+          if (!existingJwt) {
+            await exchangeToken(session.access_token)
+          } else {
+            setLoading(false)
+          }
         } else if (event === 'SIGNED_OUT') {
-          setUser(null)
-          setToken(null)
-          localStorage.removeItem('skilllink_token')
-          localStorage.removeItem('skilllink_user')
+          // Only clear state if WE triggered sign-out (token already removed by signOut())
+          if (!localStorage.getItem('skilllink_token')) {
+            setUser(null)
+            setToken(null)
+          }
           setLoading(false)
         } else if (!session && !savedToken) {
           setLoading(false)

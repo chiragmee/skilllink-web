@@ -41,11 +41,13 @@ function ConfirmContent() {
       let bookingId = existingBookingId
       if (!bookingId) {
         const booking = await createBooking({ expertId, pricingId, slotDate: date, slotStart: start, slotEnd: end, mode: mode as 'online'|'offline' })
+        if (!booking?.id) throw new Error('Booking creation failed — no ID returned')
         bookingId = booking.id
       }
 
       // 2. Initiate payment
       const payData = await initiatePayment(bookingId)
+      if (!payData?.razorpayOrderId) throw new Error('Payment initiation failed — no order ID returned. Check Razorpay keys in backend env vars.')
 
       // 3. Load Razorpay script
       await new Promise<void>((resolve, reject) => {
