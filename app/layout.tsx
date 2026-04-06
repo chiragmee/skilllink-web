@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Plus_Jakarta_Sans } from 'next/font/google'
+import { Inter } from 'next/font/google'
 import './globals.css'
 import ServerWakeBanner from '@/components/ServerWakeBanner'
 import ServiceWorkerInit from '@/components/ServiceWorkerInit'
@@ -11,34 +11,23 @@ const inter = Inter({
   display: 'swap',
 })
 
-const plusJakarta = Plus_Jakarta_Sans({
-  subsets: ['latin'],
-  variable: '--font-plus-jakarta',
-  display: 'swap',
-})
-
 export const metadata: Metadata = {
-  title: 'SkillLink — Master any skill, right in your neighborhood',
-  description: 'Connect with verified local experts for badminton, yoga, music, tech, and more.',
+  title: 'SkillLink',
+  description: 'Book trusted local experts for skills, classes, and coaching.',
   manifest: '/manifest.json',
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'default',
-    title: 'SkillLink',
-  },
 }
 
 export const viewport: Viewport = {
-  themeColor: '#24389c',
+  themeColor: '#4F46E5',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${plusJakarta.variable}`}>
+    <html lang="en" className={inter.variable}>
       <head>
         <link
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block"
           rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block"
         />
       </head>
       <body>

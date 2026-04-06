@@ -13,7 +13,7 @@ interface PricingEntry { skillId: string; skillName: string; type: string; amoun
 interface SlotEntry { dayOfWeek: number; startTime: string; endTime: string }
 
 export default function RegisterExpertPage() {
-  const { user, loading: authLoading, refreshUser } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [categories, setCategories] = useState<SkillCategory[]>([])
@@ -124,8 +124,16 @@ export default function RegisterExpertPage() {
         await setAvailability(expertId, slots)
       }
 
-      await refreshUser()
-      router.replace('/dashboard')
+      if (user) {
+        const updatedUser = {
+          ...user,
+          role: user.role === 'learner' ? 'both' : user.role,
+          expertProfileId: expertId,
+        }
+        localStorage.setItem('skilllink_user', JSON.stringify(updatedUser))
+      }
+
+      window.location.assign('/dashboard')
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.')
       setSubmitting(false)

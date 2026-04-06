@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { useAuth } from '@/lib/auth-context'
-import { useRouter } from 'next/navigation'
 
 type TopBarProps = {
   variant?: 'home' | 'back' | 'checkout'
@@ -10,53 +9,49 @@ type TopBarProps = {
   backHref?: string
 }
 
-export default function TopBar({ variant = 'home', backHref = '/' }: TopBarProps) {
+export default function TopBar({ variant = 'home', title, backHref = '/' }: TopBarProps) {
   const { user } = useAuth()
-  const router = useRouter()
-
-  if (variant === 'home') {
-    return (
-      <header className="fixed top-0 w-full flex justify-between items-center px-6 py-3 glass-nav z-50">
-        <div className="flex items-center gap-4">
-          <span className="text-2xl font-bold text-indigo-800 tracking-tight font-headline">SkillLink</span>
-        </div>
-        <Link href={user ? '/profile' : '/login'}
-          className="w-10 h-10 rounded-full overflow-hidden border-2 border-indigo-100 bg-indigo-50 flex items-center justify-center">
-          {user?.avatarUrl ? (
-            <img src={user.avatarUrl} alt={user.name||''} className="w-full h-full object-cover" />
-          ) : (
-            <span className="material-symbols-outlined text-indigo-400 text-xl">person</span>
-          )}
-        </Link>
-      </header>
-    )
-  }
-
-  if (variant === 'checkout') {
-    return (
-      <nav className="fixed top-0 w-full flex justify-between items-center px-6 py-3 glass-nav z-50">
-        <div className="flex items-center gap-4">
-          <Link href={backHref} className="p-2 hover:bg-zinc-100 transition-colors rounded-full active:scale-95">
-            <span className="material-symbols-outlined text-indigo-700">arrow_back</span>
-          </Link>
-          <span className="text-2xl font-bold text-indigo-800 tracking-tight font-headline">SkillLink</span>
-        </div>
-        <span className="text-[11px] font-medium tracking-widest uppercase text-indigo-700 px-3 py-1 bg-indigo-50 rounded-full">
-          Secure Checkout
-        </span>
-      </nav>
-    )
-  }
+  const resolvedTitle =
+    title ?? (variant === 'checkout' ? 'Secure Checkout' : variant === 'back' ? 'SkillLink' : 'SkillLink')
 
   return (
-    <header className="fixed top-0 w-full flex justify-between items-center px-6 py-3 glass-nav z-50">
-      <div className="flex items-center gap-4">
-        <Link href={backHref} className="p-2 hover:bg-zinc-100 transition-colors rounded-full">
-          <span className="material-symbols-outlined text-indigo-700">arrow_back</span>
+    <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-background/95 backdrop-blur">
+      <div className="app-shell flex h-16 items-center justify-between px-4 sm:px-6">
+        <div className="flex items-center gap-3">
+          {variant !== 'home' ? (
+            <Link
+              href={backHref}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-card transition hover:bg-slate-50"
+              aria-label="Go back"
+            >
+              <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+            </Link>
+          ) : (
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary text-sm font-semibold text-white shadow-card">
+              SL
+            </div>
+          )}
+          <div>
+            <p className="text-sm font-semibold text-slate-900">{resolvedTitle}</p>
+            <p className="text-xs text-slate-500">
+              {variant === 'checkout' ? 'Protected by Razorpay' : 'Trusted local learning'}
+            </p>
+          </div>
+        </div>
+
+        <Link
+          href={user ? '/profile' : '/login'}
+          className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-white shadow-card"
+          aria-label={user ? 'Open profile' : 'Open login'}
+        >
+          {user?.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={user.avatarUrl} alt={user.name ?? 'Profile'} className="h-full w-full object-cover" />
+          ) : (
+            <span className="material-symbols-outlined text-slate-500">person</span>
+          )}
         </Link>
-        <span className="text-2xl font-bold text-indigo-800 tracking-tight font-headline">SkillLink</span>
       </div>
-      <div />
     </header>
   )
 }

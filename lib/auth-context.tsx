@@ -1,7 +1,7 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { supabase } from './supabase'
+import { createContext, useContext, useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
 
 export interface AuthUser {
   id: string
@@ -12,139 +12,70 @@ export interface AuthUser {
   expertProfileId: string | null
 }
 
-interface AuthContextType {
+interface AuthContextValue {
   user: AuthUser | null
-  token: string | null
   loading: boolean
   signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
-  refreshUser: () => Promise<void>
 }
 
-const AuthContext = createContext<AuthContextType>({
+const AuthContext = createContext<AuthContextValue>({
   user: null,
-  token: null,
   loading: true,
   signInWithGoogle: async () => {},
   signOut: async () => {},
-  refreshUser: async () => {},
 })
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
-  const [token, setToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const exchangeToken = useCallback(async (supabaseToken: string) => {
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/google`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ supabaseToken }),
-        },
-      )
-      if (!res.ok) throw new Error('Auth exchange failed')
-      const data = await res.json()
-      localStorage.setItem('skilllink_token', data.accessToken)
-      localStorage.setItem('skilllink_user', JSON.stringify(data.user))
-      setToken(data.accessToken)
-      setUser(data.user)
-    } catch (err) {
-      console.error('[Auth] Token exchange error:', err)
-      // Never evict an existing valid session just because re-exchange failed
-      // (e.g. backend temporarily unreachable on cold start)
-      const existing = localStorage.getItem('skilllink_user')
-      if (!existing) {
-        setUser(null)
-        setToken(null)
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  const refreshUser = useCallback(async () => {
-    const t = localStorage.getItem('skilllink_token')
-    if (!t) return
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/me`, {
-        headers: { Authorization: `Bearer ${t}` },
-      })
-      if (!res.ok) return
-      const { data } = await res.json()
-      const updated = {
-        id: data.id,
-        name: data.name,
-        email: data.email,
-        avatarUrl: data.avatarUrl,
-        role: data.role,
-        expertProfileId: data.expertProfile?.id ?? null,
-      }
-      localStorage.setItem('skilllink_user', JSON.stringify(updated))
-      setUser(updated)
-    } catch {}
-  }, [])
-
   useEffect(() => {
-    // Restore from localStorage on mount
-    const savedToken = localStorage.getItem('skilllink_token')
-    const savedUser = localStorage.getItem('skilllink_user')
+    if (typeof window === 'undefined') return
+
+    const savedToken = window.localStorage.getItem('skilllink_token')
+    const savedUser = window.localStorage.getItem('skilllink_user')
+
     if (savedToken && savedUser) {
-      setToken(savedToken)
-      setUser(JSON.parse(savedUser))
-      setLoading(false)
+      try {
+        setUser(JSON.parse(savedUser))
+      } catch {
+        window.localStorage.removeItem('skilllink_user')
+        window.localStorage.removeItem('skilllink_token')
+      }
     }
 
-    // Listen for Supabase auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === 'SIGNED_IN' && session) {
-          // Only exchange if we don't already have a valid JWT
-          // Avoids unnecessary re-exchange on every page load (INITIAL_SESSION)
-          const existingJwt = localStorage.getItem('skilllink_token')
-          if (!existingJwt) {
-            await exchangeToken(session.access_token)
-          } else {
-            setLoading(false)
-          }
-        } else if (event === 'SIGNED_OUT') {
-          // Only clear state if WE triggered sign-out (token already removed by signOut())
-          if (!localStorage.getItem('skilllink_token')) {
-            setUser(null)
-            setToken(null)
-          }
-          setLoading(false)
-        } else if (!session && !savedToken) {
-          setLoading(false)
-        }
-      },
-    )
+    setLoading(false)
+  }, [])
 
-    return () => subscription.unsubscribe()
-  }, [exchangeToken])
-
-  const signInWithGoogle = async () => {
+  async function signInWithGoogle() {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
     })
   }
 
-  const signOut = async () => {
-    await supabase.auth.signOut()
+  async function signOut() {
+    window.localStorage.removeItem('skilllink_token')
+    window.localStorage.removeItem('skilllink_user')
     setUser(null)
-    setToken(null)
-    localStorage.removeItem('skilllink_token')
-    localStorage.removeItem('skilllink_user')
+
+    try {
+      await supabase.auth.signOut()
+    } finally {
+      window.location.assign('/login')
+    }
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, signInWithGoogle, signOut, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut }}>
       {children}
     </AuthContext.Provider>
   )
 }
 
-export const useAuth = () => useContext(AuthContext)
+export function useAuth() {
+  return useContext(AuthContext)
+}
