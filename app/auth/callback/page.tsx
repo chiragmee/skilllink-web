@@ -14,7 +14,19 @@ export default function AuthCallbackPage() {
 
     async function completeSignIn() {
       try {
-        const authCode = new URLSearchParams(window.location.search).get('code')
+        const queryParams = new URLSearchParams(window.location.search)
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+        const authCode = queryParams.get('code')
+        const hashAccessToken = hashParams.get('access_token')
+        const hashError =
+          hashParams.get('error_description') ||
+          hashParams.get('error') ||
+          queryParams.get('error_description') ||
+          queryParams.get('error')
+
+        if (hashError) {
+          throw new Error(hashError)
+        }
 
         if (authCode) {
           const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(authCode)
@@ -24,7 +36,7 @@ export default function AuthCallbackPage() {
         const { data, error: sessionError } = await supabase.auth.getSession()
         if (sessionError) throw sessionError
 
-        const supabaseToken = data.session?.access_token
+        const supabaseToken = data.session?.access_token || hashAccessToken
         if (!supabaseToken) {
           throw new Error('We could not complete sign in. Please try again.')
         }
@@ -37,9 +49,14 @@ export default function AuthCallbackPage() {
         window.localStorage.setItem('skilllink_user', JSON.stringify(authData.user))
 
         router.replace(authData.user.expertProfileId ? '/dashboard' : '/')
-      } catch {
+      } catch (caughtError) {
+        console.error('[AuthCallback] sign-in failed:', caughtError)
         if (!cancelled) {
-          setError('We could not complete Google sign in. Please try again.')
+          const message =
+            caughtError instanceof Error && caughtError.message
+              ? caughtError.message
+              : 'We could not complete Google sign in. Please try again.'
+          setError(message)
         }
       }
     }
