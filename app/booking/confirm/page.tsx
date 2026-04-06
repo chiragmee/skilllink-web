@@ -59,7 +59,7 @@ function ConfirmContent() {
 
       // 4. Open checkout
       const rzp = new window.Razorpay({
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || payData.razorpayKeyId,
         order_id: payData.razorpayOrderId,
         amount: payData.amount,
         currency: payData.currency,

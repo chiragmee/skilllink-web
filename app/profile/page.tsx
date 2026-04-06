@@ -10,11 +10,12 @@ import { useAuth } from '@/lib/auth-context'
 export default function ProfilePage() {
   const { user, loading, signOut } = useAuth()
 
+  const router = useRouter()
+
   async function handleSignOut() {
     await signOut()
     router.replace('/login')
   }
-  const router = useRouter()
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login')
