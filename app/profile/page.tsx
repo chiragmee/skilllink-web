@@ -9,6 +9,11 @@ import { useAuth } from '@/lib/auth-context'
 
 export default function ProfilePage() {
   const { user, loading, signOut } = useAuth()
+
+  async function handleSignOut() {
+    await signOut()
+    router.replace('/login')
+  }
   const router = useRouter()
 
   useEffect(() => {
@@ -97,7 +102,7 @@ export default function ProfilePage() {
           </Link>
         </div>
 
-        <button onClick={signOut}
+        <button onClick={handleSignOut}
           className="mt-4 w-full py-4 bg-red-50 text-red-600 font-bold rounded-2xl border border-red-200 hover:bg-red-100 transition-colors">
           Sign Out
         </button>
