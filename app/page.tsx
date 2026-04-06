@@ -1,284 +1,260 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import TopBar from '@/components/TopBar'
+import { useEffect, useMemo, useState } from 'react'
 import BottomNav from '@/components/BottomNav'
-import { searchExperts, getCategories, type Expert, type SkillCategory } from '@/lib/api'
+import TopBar from '@/components/TopBar'
+import { getCategories, searchExperts, type Expert, type SkillCategory } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 
-export default function DiscoverPage() {
+type ModeFilter = 'all' | 'online' | 'offline' | 'both'
+
+const MODE_OPTIONS: Array<{ value: ModeFilter; label: string }> = [
+  { value: 'all', label: 'All Modes' },
+  { value: 'online', label: 'Online' },
+  { value: 'offline', label: 'Offline' },
+  { value: 'both', label: 'Both' },
+]
+
+function getLowestPrice(expert: Expert) {
+  if (!expert.pricing.length) return null
+  return Math.min(...expert.pricing.map((pricing) => pricing.amount))
+}
+
+function getTopSkill(expert: Expert) {
+  return expert.expertSkills[0]?.skill.name ?? 'General Coaching'
+}
+
+export default function Homepage() {
   const { user } = useAuth()
-  const [query, setQuery] = useState('')
-  const [experts, setExperts] = useState<Expert[]>([])
   const [categories, setCategories] = useState<SkillCategory[]>([])
+  const [allExperts, setAllExperts] = useState<Expert[]>([])
+  const [experts, setExperts] = useState<Expert[]>([])
+  const [query, setQuery] = useState('')
   const [activeCategory, setActiveCategory] = useState('')
+  const [mode, setMode] = useState<ModeFilter>('all')
+  const [maxPrice, setMaxPrice] = useState(100000)
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState('')
 
-  useEffect(() => {
-    getCategories().then(setCategories).catch(() => {/* categories optional */})
-    loadExperts()
-  }, [])
+  const maxAvailablePrice = useMemo(() => {
+    if (!allExperts.length) return 100000
+    return Math.max(...allExperts.map((expert) => getLowestPrice(expert) ?? 0), 10000)
+  }, [allExperts])
 
-  async function loadExperts(skill = '', category = '') {
+  useEffect(() => {
+    setMaxPrice(maxAvailablePrice)
+  }, [maxAvailablePrice])
+
+  async function loadCategories() {
+    try {
+      const data = await getCategories()
+      setCategories(Array.isArray(data) ? data : [])
+    } catch {
+      setCategories([])
+    }
+  }
+
+  async function runSearch(nextQuery?: string) {
     setLoading(true)
     setFetchError('')
+
     try {
-      const params: Record<string, string> = { page: '1', limit: '20' }
-      if (skill) params.skill = skill
-      if (category) params.category = category
-      const data = await searchExperts(params)
-      setExperts(data.experts || [])
+      const params: Record<string, string> = { page: '1', limit: '24' }
+      const skillValue = typeof nextQuery === 'string' ? nextQuery.trim() : query.trim()
+
+      if (skillValue) params.skill = skillValue
+      if (activeCategory) params.category = activeCategory
+      if (mode !== 'all') params.mode = mode
+
+      const result = await searchExperts(params)
+      const fetchedExperts = Array.isArray(result.experts) ? result.experts : []
+      setAllExperts(fetchedExperts)
     } catch {
-      setFetchError('Could not load experts. Please check your connection and try again.')
-      setExperts([])
+      setAllExperts([])
+      setFetchError('Unable to load experts right now. Please try again.')
     } finally {
       setLoading(false)
     }
   }
 
-  function handleSearch(e: React.FormEvent) {
-    e.preventDefault()
-    const trimmed = query.trim()
-    loadExperts(trimmed)
-  }
+  useEffect(() => {
+    loadCategories()
+  }, [])
 
-  function handleCategory(cat: SkillCategory) {
-    const next = activeCategory === cat.slug ? '' : cat.slug
-    setActiveCategory(next)
-    loadExperts('', next)
-  }
+  useEffect(() => {
+    runSearch('')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCategory, mode])
 
-  const isFiltered = !!activeCategory || !!query.trim()
+  useEffect(() => {
+    const filtered = allExperts.filter((expert) => {
+      const lowestPrice = getLowestPrice(expert) ?? 0
+      return lowestPrice <= maxPrice
+    })
+    setExperts(filtered)
+  }, [allExperts, maxPrice])
 
   return (
-    <div className="bg-surface text-on-surface antialiased pb-28 min-h-screen">
-      <TopBar variant="home" />
+    <div className="min-h-screen bg-background pb-28">
+      <TopBar
+        variant="home"
+        searchValue={query}
+        onSearchChange={setQuery}
+        onSearchSubmit={() => runSearch()}
+        searchPlaceholder="Search by skill (Yoga, Guitar, Coding...)"
+      />
 
-      <main className="mt-20 px-6 max-w-5xl mx-auto">
-        {/* Hero */}
-        <section className="py-8">
-          <div className="mb-8">
-            <p className="text-xs uppercase tracking-[0.05em] text-indigo-700 font-semibold mb-2">
-              Empowering Local Talent
-            </p>
-            <h1 className="text-4xl md:text-5xl font-extrabold text-on-surface tracking-tight leading-tight mb-6">
-              Master any skill,{' '}
-              <br />
-              <span className="bg-gradient-to-r from-primary to-primary-container bg-clip-text text-transparent">
-                right in your neighborhood.
-              </span>
-            </h1>
-          </div>
+      <main className="app-shell px-4 pt-5 sm:px-6">
+        <section className="rounded-3xl bg-card p-4 shadow-card sm:p-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary/80">Find The Right Expert</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
+            Book trusted coaches around you
+          </h1>
 
-          <form onSubmit={handleSearch} className="relative group">
-            <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none">
-              <span className="material-symbols-outlined text-zinc-400">search</span>
-            </div>
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="w-full h-16 pl-14 pr-36 bg-surface-container-high border-none rounded-2xl focus:ring-2 focus:ring-primary/20 text-lg font-medium placeholder:text-zinc-400 transition-all outline-none"
-              placeholder="Find a skill (e.g., Badminton, Yoga)"
-            />
-            <button
-              type="submit"
-              className="absolute right-3 top-3 bottom-3 px-6 bg-secondary text-white font-bold rounded-xl shadow-lg hover:scale-[0.98] transition-transform flex items-center gap-2"
-            >
-              Search
-            </button>
-          </form>
-        </section>
-
-        {/* Categories */}
-        {categories.length > 0 && (
-          <section className="mb-12">
-            <h2 className="text-xl font-bold tracking-tight mb-4">Popular Categories</h2>
-            <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-4 -mx-6 px-6">
-              {categories.map((cat) => (
+          <div className="mt-5">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Categories</p>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              <button
+                onClick={() => setActiveCategory('')}
+                className={`rounded-full px-4 py-2 text-sm font-medium ${
+                  activeCategory === '' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                All
+              </button>
+              {categories.map((category) => (
                 <button
-                  key={cat.id}
-                  onClick={() => handleCategory(cat)}
-                  className={`flex-shrink-0 flex items-center gap-2 px-6 py-3 rounded-2xl font-medium transition-colors ${
-                    activeCategory === cat.slug
-                      ? 'bg-indigo-50 text-indigo-700 border border-indigo-100 font-semibold'
-                      : 'bg-white hover:bg-surface-container-low text-on-surface-variant'
+                  key={category.id}
+                  onClick={() => setActiveCategory(category.slug)}
+                  className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium ${
+                    activeCategory === category.slug ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-xl">
-                    {cat.slug === 'sports' ? 'sports_tennis' :
-                     cat.slug === 'music' ? 'music_note' :
-                     cat.slug === 'tech' ? 'code' :
-                     cat.slug === 'fitness' ? 'self_improvement' :
-                     cat.slug === 'cooking' ? 'restaurant' : 'brush'}
-                  </span>
-                  {cat.name}
+                  {category.name}
                 </button>
               ))}
             </div>
-          </section>
-        )}
-
-        {/* Register as Expert CTA */}
-        {user && !user.expertProfileId && (
-          <section className="mb-8">
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-6 text-white flex items-center justify-between">
-              <div>
-                <p className="font-bold text-lg">Are you an expert?</p>
-                <p className="text-indigo-200 text-sm mt-1">List your skills and start earning</p>
-              </div>
-              <Link
-                href="/register-expert"
-                className="bg-white text-indigo-700 font-bold px-5 py-2.5 rounded-xl hover:bg-indigo-50 transition-colors flex-shrink-0"
-              >
-                Register →
-              </Link>
-            </div>
-          </section>
-        )}
-
-        {/* Experts Grid */}
-        <section className="mb-12">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-2xl font-extrabold tracking-tight">
-                {isFiltered ? 'Search Results' : 'Experts Near You'}
-              </h2>
-              {!loading && !fetchError && (
-                <p className="text-zinc-500 text-sm mt-1">
-                  {experts.length === 0
-                    ? isFiltered ? 'No experts found for this search' : 'No experts yet'
-                    : `${experts.length} expert${experts.length !== 1 ? 's' : ''} found`}
-                </p>
-              )}
-            </div>
-            {isFiltered && (
-              <button
-                onClick={() => { setQuery(''); setActiveCategory(''); loadExperts() }}
-                className="text-sm text-primary font-semibold flex items-center gap-1"
-              >
-                <span className="material-symbols-outlined text-sm">close</span>
-                Clear
-              </button>
-            )}
           </div>
 
-          {/* Error state */}
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Mode</p>
+              <div className="flex flex-wrap gap-2">
+                {MODE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => setMode(option.value)}
+                    className={`rounded-xl px-3 py-2 text-sm font-medium ${
+                      mode === option.value ? 'bg-primary text-white' : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Max Price</p>
+                <p className="text-sm font-semibold text-slate-700">
+                  Up to Rs {(maxPrice / 100).toLocaleString('en-IN')}
+                </p>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={Math.max(maxAvailablePrice, 10000)}
+                step={500}
+                value={maxPrice}
+                onChange={(event) => setMaxPrice(Number(event.target.value))}
+                className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-slate-200"
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-6">
           {fetchError && !loading && (
-            <div className="bg-red-50 border border-red-200 rounded-2xl p-5 text-center">
-              <span className="material-symbols-outlined text-red-400 text-4xl mb-2 block">wifi_off</span>
-              <p className="text-red-700 font-semibold">{fetchError}</p>
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
+              <p className="text-sm font-medium text-red-700">{fetchError}</p>
               <button
-                onClick={() => loadExperts(query, activeCategory)}
-                className="mt-3 px-5 py-2 bg-red-600 text-white rounded-xl text-sm font-semibold"
+                onClick={() => runSearch()}
+                className="mt-3 inline-flex rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white"
               >
                 Try Again
               </button>
             </div>
           )}
 
-          {/* Loading skeletons */}
           {loading && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="bg-surface-container-lowest rounded-[24px] p-5 h-36 animate-pulse" />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3, 4, 5, 6].map((skeleton) => (
+                <div key={skeleton} className="h-40 animate-pulse rounded-2xl bg-white shadow-card" />
               ))}
             </div>
           )}
 
-          {/* Empty state */}
           {!loading && !fetchError && experts.length === 0 && (
-            <div className="text-center py-16 text-on-surface-variant">
-              <span className="material-symbols-outlined text-5xl mb-4 block">search_off</span>
-              <p className="font-semibold text-lg">
-                {isFiltered ? `No experts found for "${query || activeCategory}"` : 'No experts yet'}
+            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-card">
+              <span className="material-symbols-outlined text-4xl text-slate-300">search_off</span>
+              <h2 className="mt-2 text-lg font-semibold text-slate-900">No experts found</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Try a different skill, mode, or price range to find more experts.
               </p>
-              <p className="text-sm mt-2 text-zinc-400">
-                {isFiltered ? 'Try a different skill or category' : 'Check back soon — experts are signing up!'}
-              </p>
-              {isFiltered && (
-                <button
-                  onClick={() => { setQuery(''); setActiveCategory(''); loadExperts() }}
-                  className="mt-4 px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold"
-                >
-                  See All Experts
-                </button>
-              )}
             </div>
           )}
 
-          {/* Expert cards */}
           {!loading && !fetchError && experts.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {experts.map((expert) => {
-                const minPrice = expert.pricing.length > 0
-                  ? Math.min(...expert.pricing.map((p) => p.amount))
-                  : null
-                const skillNames = expert.expertSkills.map((es) => es.skill.name).slice(0, 2).join(', ')
+                const lowestPrice = getLowestPrice(expert)
+                const topSkill = getTopSkill(expert)
+
                 return (
-                  <div
-                    key={expert.id}
-                    className="bg-surface-container-lowest rounded-[24px] p-5 shadow-editorial group hover:-translate-y-1 transition-all duration-300"
-                  >
-                    <div className="flex gap-5">
-                      <div className="w-24 h-24 flex-shrink-0">
-                        {expert.user.avatarUrl ? (
-                          <img
-                            src={expert.user.avatarUrl}
-                            alt={expert.user.name || 'Expert'}
-                            className="w-full h-full object-cover rounded-2xl"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-indigo-100 rounded-2xl flex items-center justify-center">
-                            <span className="material-symbols-outlined text-indigo-400 text-4xl">person</span>
-                          </div>
-                        )}
+                  <article key={expert.id} className="rounded-2xl bg-white p-4 shadow-card">
+                    <div className="flex items-start gap-3">
+                      {expert.user.avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={expert.user.avatarUrl}
+                          alt={expert.user.name ?? 'Expert'}
+                          className="h-14 w-14 rounded-2xl object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-500">
+                          <span className="material-symbols-outlined">person</span>
+                        </div>
+                      )}
+
+                      <div className="min-w-0 flex-1">
+                        <h3 className="truncate text-base font-semibold text-slate-900">{expert.user.name ?? 'Expert'}</h3>
+                        <p className="truncate text-sm font-medium text-primary">{topSkill}</p>
+                        <p className="mt-1 text-xs text-slate-500">{expert.city || 'Location not specified'}</p>
                       </div>
-                      <div className="flex-grow min-w-0">
-                        <div className="flex justify-between items-start">
-                          <div className="min-w-0">
-                            <h3 className="text-lg font-bold text-on-surface truncate">
-                              {expert.user.name || 'Expert'}
-                            </h3>
-                            <p className="text-primary text-sm font-semibold truncate">{skillNames || 'Multiple Skills'}</p>
-                            {expert.city && (
-                              <p className="text-zinc-400 text-xs mt-0.5 flex items-center gap-1">
-                                <span className="material-symbols-outlined text-xs">location_on</span>
-                                {expert.city}
-                              </p>
-                            )}
-                          </div>
-                          {expert.totalReviews > 0 && (
-                            <div className="flex items-center gap-1 bg-amber-50 text-amber-700 px-2 py-1 rounded-lg flex-shrink-0 ml-2">
-                              <span className="material-symbols-outlined text-sm text-amber-500" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                              <span className="text-xs font-bold">{Number(expert.avgRating).toFixed(1)}</span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="mt-4 flex items-center justify-between">
-                          <div>
-                            {minPrice !== null ? (
-                              <>
-                                <span className="text-zinc-400 text-xs uppercase font-bold tracking-widest block mb-0.5">From</span>
-                                <span className="text-xl font-extrabold text-on-surface">
-                                  ₹{(minPrice / 100).toLocaleString('en-IN')}
-                                </span>
-                              </>
-                            ) : (
-                              <span className="text-zinc-400 text-sm">Contact for pricing</span>
-                            )}
-                          </div>
-                          <Link
-                            href={`/expert/${expert.id}`}
-                            className="px-5 py-2.5 bg-indigo-50 text-indigo-700 font-bold rounded-xl group-hover:bg-primary group-hover:text-white transition-colors"
-                          >
-                            View
-                          </Link>
-                        </div>
+
+                      <div className="rounded-lg bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
+                        {expert.totalReviews > 0 ? `${Number(expert.avgRating).toFixed(1)} (${expert.totalReviews})` : 'New'}
                       </div>
                     </div>
-                  </div>
+
+                    <div className="mt-4 flex items-center justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Starting from</p>
+                        <p className="text-lg font-semibold text-slate-900">
+                          {lowestPrice !== null ? `Rs ${(lowestPrice / 100).toLocaleString('en-IN')}` : 'Ask for price'}
+                        </p>
+                      </div>
+
+                      <Link
+                        href={`/expert/${expert.id}`}
+                        className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white"
+                      >
+                        Book
+                      </Link>
+                    </div>
+                  </article>
                 )
               })}
             </div>

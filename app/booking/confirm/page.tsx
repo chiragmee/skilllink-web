@@ -1,238 +1,240 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import TopBar from '@/components/TopBar'
 import { createBooking, initiatePayment, verifyPayment } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 
 declare global {
-  interface Window { Razorpay: any }
+  interface Window {
+    Razorpay: new (options: Record<string, unknown>) => {
+      on: (event: string, callback: () => void) => void
+      open: () => void
+    }
+  }
 }
 
-function ConfirmContent() {
-  const params = useSearchParams()
+const USER_FRIENDLY_ERRORS: Record<string, string> = {
+  BOOKING_FAILED: 'We could not create your booking. The selected slot may no longer be available.',
+  PAYMENT_INIT_FAILED: 'We could not start payment right now. Please try again in a few moments.',
+  SCRIPT_FAILED: 'Payment gateway could not load. Please check your internet and try again.',
+}
+
+function ConfirmBookingContent() {
   const router = useRouter()
+  const params = useSearchParams()
   const { user } = useAuth()
 
-  const existingBookingId = params.get('bookingId') || ''
-  const expertId = params.get('expertId') || ''
-  const pricingId = params.get('pricingId') || ''
-  const date = params.get('date') || ''
-  const start = params.get('start') || ''
-  const end = params.get('end') || ''
-  const mode = params.get('mode') || 'online'
-  const expertName = params.get('expertName') || 'Expert'
-  const amount = parseInt(params.get('amount') || '0')
-  const duration = parseInt(params.get('duration') || '60')
+  const bookingIdFromParams = params.get('bookingId') ?? ''
+  const expertId = params.get('expertId') ?? ''
+  const pricingId = params.get('pricingId') ?? ''
+  const date = params.get('date') ?? ''
+  const start = params.get('start') ?? ''
+  const end = params.get('end') ?? ''
+  const mode = params.get('mode') ?? 'online'
+  const expertName = params.get('expertName') ?? 'Expert'
+  const amount = Number(params.get('amount') ?? '0')
+  const duration = Number(params.get('duration') ?? '60')
 
-  const [step, setStep] = useState<'summary' | 'paying' | 'success' | 'error'>('summary')
-  const [errorMsg, setErrorMsg] = useState('')
+  const [step, setStep] = useState<'summary' | 'paying' | 'error'>('summary')
+  const [errorMessage, setErrorMessage] = useState('')
+
+  const missingParamsForNewBooking = !expertId || !pricingId || !date || !start || !end
+  const canProceed = bookingIdFromParams || !missingParamsForNewBooking
 
   useEffect(() => {
     if (!user) router.replace('/login')
-  }, [user, router])
+  }, [router, user])
 
-  // Validate required params
-  const missingParams = !expertId || !pricingId || !date || !start || !end
-  if (missingParams && !existingBookingId) {
+  async function loadRazorpayScript() {
+    await new Promise<void>((resolve, reject) => {
+      if (window.Razorpay) {
+        resolve()
+        return
+      }
+
+      const script = document.createElement('script')
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+      script.async = true
+      script.onload = () => resolve()
+      script.onerror = () => reject(new Error('SCRIPT_FAILED'))
+      document.body.appendChild(script)
+    })
+  }
+
+  async function handlePayment() {
+    setStep('paying')
+    setErrorMessage('')
+
+    try {
+      let bookingId = bookingIdFromParams
+
+      if (!bookingId) {
+        const booking = await createBooking({
+          expertId,
+          pricingId,
+          slotDate: date,
+          slotStart: start,
+          slotEnd: end,
+          mode,
+        })
+
+        if (!booking?.id) {
+          throw new Error('BOOKING_FAILED')
+        }
+
+        bookingId = booking.id
+      }
+
+      const payment = await initiatePayment(bookingId)
+      if (!payment?.razorpayOrderId) {
+        throw new Error('PAYMENT_INIT_FAILED')
+      }
+
+      await loadRazorpayScript()
+
+      const razorpay = new window.Razorpay({
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || payment.razorpayKeyId,
+        amount: payment.amount,
+        currency: payment.currency,
+        order_id: payment.razorpayOrderId,
+        name: 'SkillLink',
+        description: `Session with ${expertName}`,
+        theme: { color: '#4F46E5' },
+        prefill: {
+          name: user?.name ?? '',
+          email: user?.email ?? '',
+        },
+        handler: async (response: {
+          razorpay_payment_id: string
+          razorpay_order_id: string
+          razorpay_signature: string
+        }) => {
+          try {
+            await verifyPayment({
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpayOrderId: response.razorpay_order_id,
+              razorpaySignature: response.razorpay_signature,
+            })
+            router.replace('/bookings')
+          } catch {
+            setStep('error')
+            setErrorMessage('Payment completed but verification failed. Please check bookings in a moment.')
+          }
+        },
+        modal: {
+          ondismiss: () => setStep('summary'),
+        },
+      })
+
+      razorpay.on('payment.failed', () => {
+        setStep('error')
+        setErrorMessage('Payment did not complete. You can try again safely.')
+      })
+
+      razorpay.open()
+    } catch (error) {
+      const code = error instanceof Error ? error.message : 'UNKNOWN'
+      setStep('error')
+      setErrorMessage(USER_FRIENDLY_ERRORS[code] || 'Something went wrong while processing payment. Please try again.')
+    }
+  }
+
+  if (!canProceed) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-surface px-6 text-center">
-        <span className="material-symbols-outlined text-5xl text-zinc-300 mb-4">error_outline</span>
-        <h2 className="text-xl font-bold mb-2">Invalid Booking Link</h2>
-        <p className="text-zinc-500 text-sm mb-6">Some booking details are missing. Please go back and try again.</p>
-        <button onClick={() => router.back()} className="px-6 py-3 bg-primary text-white rounded-2xl font-bold">
-          Go Back
-        </button>
+      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+        <div className="max-w-sm rounded-3xl border border-slate-200 bg-white p-6 text-center shadow-card">
+          <h1 className="text-lg font-semibold text-slate-900">Booking details missing</h1>
+          <p className="mt-2 text-sm text-slate-500">
+            Please go back to the expert profile, select pricing and slot, then continue.
+          </p>
+          <button
+            onClick={() => router.back()}
+            className="mt-5 inline-flex rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white"
+          >
+            Go Back
+          </button>
+        </div>
       </div>
     )
   }
 
   const formattedDate = date
-    ? new Date(date).toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
-    : ''
-
-  async function handlePay() {
-    setStep('paying')
-    setErrorMsg('')
-    try {
-      // Create booking if not already created
-      let bookingId = existingBookingId
-      if (!bookingId) {
-        const booking = await createBooking({
-          expertId, pricingId, slotDate: date, slotStart: start, slotEnd: end,
-          mode: mode as 'online' | 'offline',
-        })
-        if (!booking?.id) throw new Error('BOOKING_FAILED')
-        bookingId = booking.id
-      }
-
-      // Initiate Razorpay order
-      const payData = await initiatePayment(bookingId)
-      if (!payData?.razorpayOrderId) throw new Error('PAYMENT_INIT_FAILED')
-
-      // Load Razorpay script
-      await new Promise<void>((resolve, reject) => {
-        if (window.Razorpay) { resolve(); return }
-        const script = document.createElement('script')
-        script.src = 'https://checkout.razorpay.com/v1/checkout.js'
-        script.onload = () => resolve()
-        script.onerror = () => reject(new Error('SCRIPT_FAILED'))
-        document.body.appendChild(script)
+    ? new Date(date).toLocaleDateString('en-IN', {
+        weekday: 'long',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
       })
-
-      // Open Razorpay checkout
-      const rzp = new window.Razorpay({
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || payData.razorpayKeyId,
-        order_id: payData.razorpayOrderId,
-        amount: payData.amount,
-        currency: payData.currency,
-        name: 'SkillLink',
-        description: `Session with ${expertName}`,
-        prefill: { name: user?.name || '', email: user?.email || '' },
-        theme: { color: '#4F46E5' },
-        handler: function(response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) {
-          // Always move to success — payment was captured by Razorpay.
-          // verifyPayment confirms it on our backend; if it fails transiently,
-          // the Razorpay webhook will reconcile asynchronously.
-          verifyPayment({
-            razorpayPaymentId: response.razorpay_payment_id,
-            razorpayOrderId: response.razorpay_order_id,
-            razorpaySignature: response.razorpay_signature,
-          }).catch(() => {
-            // Verification failed — webhook will reconcile. Still show success
-            // since money was captured by Razorpay. Booking status will update shortly.
-          }).finally(() => setStep('success'))
-        },
-        modal: {
-          ondismiss: function() {
-            setStep('summary')
-          }
-        }
-      })
-      rzp.on('payment.failed', function() {
-        setStep('error')
-        setErrorMsg('Your payment could not be processed. Please try again.')
-      })
-      rzp.open()
-    } catch (err: any) {
-      setStep('error')
-      const code = err.message
-      if (code === 'BOOKING_FAILED') {
-        setErrorMsg('Could not create your booking. The slot may already be taken — please go back and select another.')
-      } else if (code === 'PAYMENT_INIT_FAILED') {
-        setErrorMsg('Payment setup failed. Please try again in a moment.')
-      } else if (code === 'SCRIPT_FAILED') {
-        setErrorMsg('Could not load the payment gateway. Please check your internet connection and try again.')
-      } else {
-        setErrorMsg(err.message || 'Something went wrong. Please try again.')
-      }
-    }
-  }
-
-  if (step === 'success') return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-surface px-6 text-center">
-      <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-6">
-        <span className="material-symbols-outlined text-green-600 text-4xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-          check_circle
-        </span>
-      </div>
-      <h1 className="text-2xl font-bold mb-2">Booking Confirmed!</h1>
-      <p className="text-on-surface-variant mb-1">Session with <strong>{expertName}</strong></p>
-      <p className="text-on-surface-variant text-sm mb-2">{formattedDate}</p>
-      <p className="text-on-surface-variant text-sm mb-8">{start} – {end}</p>
-      <button onClick={() => router.replace('/bookings')}
-        className="w-full max-w-xs bg-primary text-white font-bold px-8 py-4 rounded-2xl mb-3">
-        View My Bookings
-      </button>
-      <button onClick={() => router.replace('/')}
-        className="text-sm text-zinc-400 hover:text-zinc-600">
-        Back to Home
-      </button>
-    </div>
-  )
+    : 'Date from your existing booking'
 
   return (
-    <div className="bg-surface text-on-surface min-h-screen pb-32">
-      <TopBar variant="checkout" />
-      <main className="mt-16 max-w-lg mx-auto px-4">
-        <h1 className="text-2xl font-bold mt-6 mb-6">Confirm Booking</h1>
+    <div className="min-h-screen bg-background pb-28">
+      <TopBar variant="checkout" title="Confirm Booking" backHref="/" />
 
-        {/* Session Details */}
-        <div className="bg-white rounded-3xl p-6 border border-zinc-100 mb-4">
-          <h2 className="font-semibold text-on-surface-variant text-xs mb-4 uppercase tracking-widest">Session Details</h2>
-          <div className="space-y-3">
-            <div className="flex justify-between">
-              <span className="text-on-surface-variant text-sm">Expert</span>
-              <span className="font-semibold text-sm">{expertName}</span>
+      <main className="app-shell px-4 pb-24 pt-5 sm:px-6">
+        <section className="rounded-3xl bg-white p-5 shadow-card">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Session Summary</h2>
+          <div className="mt-4 space-y-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Expert</span>
+              <span className="font-semibold text-slate-900">{expertName}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-on-surface-variant text-sm">Date</span>
-              <span className="font-semibold text-sm">{formattedDate}</span>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Date</span>
+              <span className="font-semibold text-slate-900">{formattedDate}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-on-surface-variant text-sm">Time</span>
-              <span className="font-semibold text-sm">{start} – {end}</span>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Time</span>
+              <span className="font-semibold text-slate-900">
+                {start && end ? `${start} - ${end}` : 'From existing booking'}
+              </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-on-surface-variant text-sm">Duration</span>
-              <span className="font-semibold text-sm">{duration} min</span>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Duration</span>
+              <span className="font-semibold text-slate-900">{duration} min</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-on-surface-variant text-sm">Mode</span>
-              <span className="font-semibold text-sm capitalize">{mode}</span>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Mode</span>
+              <span className="font-semibold capitalize text-slate-900">{mode}</span>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Price */}
-        <div className="bg-white rounded-3xl p-6 border border-zinc-100 mb-4">
-          <h2 className="font-semibold text-on-surface-variant text-xs mb-4 uppercase tracking-widest">Price Breakdown</h2>
-          <div className="flex justify-between mb-2">
-            <span className="text-on-surface-variant text-sm">Session Fee</span>
-            <span className="font-semibold text-sm">&#8377;{(amount / 100).toLocaleString('en-IN')}</span>
+        <section className="mt-4 rounded-3xl bg-white p-5 shadow-card">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Price Breakdown</h2>
+          <div className="mt-4 space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Session Fee</span>
+              <span className="font-semibold text-slate-900">Rs {(amount / 100).toLocaleString('en-IN')}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Platform Fee</span>
+              <span className="font-semibold text-green-600">Free</span>
+            </div>
+            <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3">
+              <span className="text-sm font-semibold text-slate-700">Total</span>
+              <span className="text-xl font-semibold text-slate-900">Rs {(amount / 100).toLocaleString('en-IN')}</span>
+            </div>
           </div>
-          <div className="flex justify-between mb-2">
-            <span className="text-on-surface-variant text-sm">Platform Fee</span>
-            <span className="font-semibold text-sm text-green-600">Free</span>
-          </div>
-          <div className="border-t border-zinc-100 mt-3 pt-3 flex justify-between">
-            <span className="font-bold">Total</span>
-            <span className="font-extrabold text-lg text-primary">&#8377;{(amount / 100).toLocaleString('en-IN')}</span>
-          </div>
-        </div>
+        </section>
 
-        {/* Error */}
         {step === 'error' && (
-          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-4 flex gap-3 items-start">
-            <span className="material-symbols-outlined text-red-500 flex-shrink-0 mt-0.5">error</span>
-            <div>
-              <p className="text-red-700 text-sm font-medium">{errorMsg}</p>
-              <button onClick={() => setStep('summary')} className="text-red-600 text-sm font-semibold mt-1 underline">
-                Try Again
-              </button>
-            </div>
-          </div>
+          <section className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4">
+            <p className="text-sm font-medium text-red-700">{errorMessage}</p>
+          </section>
         )}
-
-        {/* Trust badge */}
-        <div className="bg-indigo-50 rounded-2xl p-4 flex items-start gap-3">
-          <span className="material-symbols-outlined text-indigo-600 flex-shrink-0">shield</span>
-          <p className="text-sm text-indigo-700">
-            Payment is secured via Razorpay. Your money is held safely and released only after your session is confirmed.
-          </p>
-        </div>
       </main>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4">
-        <div className="max-w-lg mx-auto">
-          <button onClick={handlePay} disabled={step === 'paying'}
-            className="w-full bg-primary text-white font-bold py-4 rounded-2xl text-lg disabled:opacity-60 flex items-center justify-center gap-3">
-            {step === 'paying' ? (
-              <><div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" /><span>Setting up payment…</span></>
-            ) : (
-              <><span className="material-symbols-outlined">payments</span>Pay &#8377;{(amount / 100).toLocaleString('en-IN')}</>
-            )}
+      <div className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white p-4">
+        <div className="app-shell">
+          <button
+            onClick={handlePayment}
+            disabled={step === 'paying'}
+            className="w-full rounded-2xl bg-primary px-4 py-4 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {step === 'paying' ? 'Preparing payment...' : `Pay Rs ${(amount / 100).toLocaleString('en-IN')}`}
           </button>
         </div>
       </div>
@@ -242,12 +244,14 @@ function ConfirmContent() {
 
 export default function ConfirmBookingPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-      </div>
-    }>
-      <ConfirmContent />
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
+        </div>
+      }
+    >
+      <ConfirmBookingContent />
     </Suspense>
   )
 }

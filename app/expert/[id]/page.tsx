@@ -1,200 +1,328 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useEffect, useMemo, useState } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 import TopBar from '@/components/TopBar'
-import { getExpert, getAvailableSlots, getExpertReviews, type Expert, type AvailabilitySlot } from '@/lib/api'
+import {
+  getAvailableSlots,
+  getExpert,
+  getExpertReviews,
+  type AvailabilitySlot,
+  type Expert,
+  type Review,
+} from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 
-function formatDate(d: Date) { return d.toISOString().split('T')[0] }
-function addDays(d: Date, n: number) { const r = new Date(d); r.setDate(r.getDate() + n); return r }
-const DAY_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+function toDateKey(date: Date) {
+  return date.toISOString().split('T')[0]
+}
 
-export default function ExpertPage() {
-  const { id } = useParams<{ id: string }>()
+function addDays(date: Date, days: number) {
+  const nextDate = new Date(date)
+  nextDate.setDate(nextDate.getDate() + days)
+  return nextDate
+}
+
+const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+export default function ExpertProfilePage() {
+  const params = useParams<{ id: string }>()
   const router = useRouter()
   const { user } = useAuth()
+  const expertId = params.id
   const [expert, setExpert] = useState<Expert | null>(null)
-  const [reviews, setReviews] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const today = new Date()
-  const [selectedDate, setSelectedDate] = useState(formatDate(today))
-  const [slots, setSlots] = useState<AvailabilitySlot[]>([])
-  const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null)
+  const [reviews, setReviews] = useState<Review[]>([])
+  const [profileLoading, setProfileLoading] = useState(true)
+  const [profileError, setProfileError] = useState('')
   const [selectedPricingId, setSelectedPricingId] = useState('')
+  const [selectedDate, setSelectedDate] = useState(toDateKey(new Date()))
+  const [selectedSlot, setSelectedSlot] = useState<{ startTime: string; endTime: string } | null>(null)
+  const [slots, setSlots] = useState<AvailabilitySlot[]>([])
   const [slotsLoading, setSlotsLoading] = useState(false)
+  const [slotsError, setSlotsError] = useState('')
+
+  const dateOptions = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(new Date(), index)), [])
 
   useEffect(() => {
-    Promise.all([getExpert(id), getExpertReviews(id)])
-      .then(([exp, revs]) => {
-        setExpert(exp)
-        setReviews(Array.isArray(revs) ? revs : [])
-        if (exp?.pricing?.length > 0) setSelectedPricingId(exp.pricing[0].id)
-      })
-      .catch(() => setExpert(null))
-      .finally(() => setLoading(false))
-  }, [id])
+    let mounted = true
+
+    async function loadProfile() {
+      setProfileLoading(true)
+      setProfileError('')
+
+      try {
+        const [expertData, reviewsData] = await Promise.all([getExpert(expertId), getExpertReviews(expertId)])
+        if (!mounted) return
+
+        setExpert(expertData)
+        setReviews(Array.isArray(reviewsData) ? reviewsData : [])
+        setSelectedPricingId(expertData.pricing[0]?.id ?? '')
+      } catch {
+        if (mounted) setProfileError('We could not load this expert profile right now.')
+      } finally {
+        if (mounted) setProfileLoading(false)
+      }
+    }
+
+    loadProfile()
+
+    return () => {
+      mounted = false
+    }
+  }, [expertId])
 
   useEffect(() => {
-    if (!id) return
-    setSlotsLoading(true)
-    getAvailableSlots(id, selectedDate)
-      .then(data => setSlots(Array.isArray(data) ? data : []))
-      .catch(() => setSlots([]))
-      .finally(() => setSlotsLoading(false))
-    setSelectedSlot(null)
-  }, [id, selectedDate])
+    let mounted = true
 
-  function handleBook() {
-    if (!user) { router.push('/login'); return }
-    if (!selectedSlot || !selectedPricingId) return
-    const pricing = expert?.pricing.find(p => p.id === selectedPricingId)
-    const params = new URLSearchParams({
-      expertId: id, pricingId: selectedPricingId, date: selectedDate,
-      start: selectedSlot.startTime, end: selectedSlot.endTime,
-      mode: expert?.mode === 'offline' ? 'offline' : 'online',
-      expertName: expert?.user.name || '', amount: String(pricing?.amount || 0),
-      duration: String(pricing?.durationMins || 60),
+    async function loadSlots() {
+      setSlotsLoading(true)
+      setSlotsError('')
+      setSelectedSlot(null)
+
+      try {
+        const slotData = await getAvailableSlots(expertId, selectedDate)
+        if (!mounted) return
+        setSlots(Array.isArray(slotData) ? slotData : [])
+      } catch {
+        if (mounted) {
+          setSlots([])
+          setSlotsError('Unable to load slots for this date. Please try another date.')
+        }
+      } finally {
+        if (mounted) setSlotsLoading(false)
+      }
+    }
+
+    loadSlots()
+
+    return () => {
+      mounted = false
+    }
+  }, [expertId, selectedDate])
+
+  function handleBookSession() {
+    if (!user) {
+      router.push('/login')
+      return
+    }
+
+    if (!expert || !selectedPricingId || !selectedSlot) return
+
+    const selectedPricing = expert.pricing.find((pricing) => pricing.id === selectedPricingId)
+    if (!selectedPricing) return
+
+    const query = new URLSearchParams({
+      expertId,
+      pricingId: selectedPricing.id,
+      date: selectedDate,
+      start: selectedSlot.startTime,
+      end: selectedSlot.endTime,
+      mode: expert.mode,
+      expertName: expert.user.name ?? 'Expert',
+      amount: String(selectedPricing.amount),
+      duration: String(selectedPricing.durationMins),
     })
-    router.push('/booking/confirm?' + params.toString())
+
+    router.push(`/booking/confirm?${query.toString()}`)
   }
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-    </div>
-  )
-  if (!expert) return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-surface px-6 text-center">
-      <span className="material-symbols-outlined text-5xl text-zinc-300 mb-4">person_off</span>
-      <p className="text-xl font-bold mb-2">Expert not found</p>
-      <p className="text-zinc-400 text-sm mb-6">This profile may have been removed or the link is incorrect.</p>
-      <Link href="/" className="px-6 py-3 bg-primary text-white rounded-2xl font-bold">Browse Experts</Link>
-    </div>
-  )
+  if (profileLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
+      </div>
+    )
+  }
 
-  const dates = Array.from({ length: 7 }, (_, i) => addDays(today, i))
+  if (profileError || !expert) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+        <div className="max-w-sm rounded-3xl border border-slate-200 bg-white p-7 text-center shadow-card">
+          <h1 className="text-lg font-semibold text-slate-900">Expert profile unavailable</h1>
+          <p className="mt-2 text-sm text-slate-500">{profileError || 'Please try again in a few moments.'}</p>
+          <Link href="/" className="mt-5 inline-flex rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white">
+            Back to homepage
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="bg-surface text-on-surface min-h-screen pb-32">
-      <TopBar variant="back" />
-      <main className="mt-16 max-w-2xl mx-auto px-4">
-        <div className="bg-white rounded-3xl p-6 shadow-editorial mt-4">
-          <div className="flex gap-5 items-start">
-            <div className="w-20 h-20 flex-shrink-0">
-              {expert.user.avatarUrl ? (
-                <img src={expert.user.avatarUrl} alt={expert.user.name||''} className="w-full h-full object-cover rounded-2xl" />
-              ) : (
-                <div className="w-full h-full bg-indigo-100 rounded-2xl flex items-center justify-center">
-                  <span className="material-symbols-outlined text-indigo-400 text-3xl">person</span>
-                </div>
-              )}
-            </div>
-            <div className="flex-grow">
-              <h1 className="text-xl font-bold">{expert.user.name}</h1>
-              <p className="text-primary font-semibold text-sm">{expert.expertSkills.map(es => es.skill.name).join(' · ')}</p>
-              {expert.city && <p className="text-zinc-400 text-xs mt-1 flex items-center gap-1"><span className="material-symbols-outlined text-xs">location_on</span>{expert.city}</p>}
-              <div className="flex gap-4 mt-2">
-                {expert.totalReviews > 0 && (
-                  <span className="text-sm font-semibold flex items-center gap-1">
-                    <span className="material-symbols-outlined text-amber-400 text-sm" style={{fontVariationSettings:"'FILL' 1"}}>star</span>
-                    {Number(expert.avgRating).toFixed(1)} ({expert.totalReviews})
-                  </span>
-                )}
-                <span className="text-sm text-zinc-500 capitalize">{expert.mode} sessions</span>
+    <div className="min-h-screen bg-background pb-32">
+      <TopBar variant="back" backHref="/" title="Expert Profile" />
+
+      <main className="app-shell px-4 pb-24 pt-5 sm:px-6">
+        <section className="rounded-3xl bg-white p-5 shadow-card">
+          <div className="flex gap-4">
+            {expert.user.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={expert.user.avatarUrl}
+                alt={expert.user.name ?? 'Expert'}
+                className="h-20 w-20 rounded-2xl object-cover"
+              />
+            ) : (
+              <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-500">
+                <span className="material-symbols-outlined text-3xl">person</span>
+              </div>
+            )}
+
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl font-semibold text-slate-900">{expert.user.name ?? 'Expert'}</h1>
+              <p className="mt-1 text-sm text-slate-600">{expert.city || 'Location not specified'}</p>
+
+              <div className="mt-2 flex flex-wrap gap-2">
+                <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold capitalize text-indigo-700">
+                  {expert.mode} sessions
+                </span>
+                <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                  {expert.totalReviews > 0
+                    ? `${Number(expert.avgRating).toFixed(1)} stars (${expert.totalReviews} reviews)`
+                    : 'No reviews yet'}
+                </span>
               </div>
             </div>
           </div>
-          {expert.bio && <p className="mt-4 text-on-surface-variant text-sm leading-relaxed">{expert.bio}</p>}
-        </div>
 
-        {expert.pricing.length > 0 && (
-          <div className="mt-6">
-            <h2 className="font-bold text-lg mb-3">Choose a Plan</h2>
-            <div className="grid grid-cols-1 gap-3">
-              {expert.pricing.map(p => (
-                <button key={p.id} onClick={() => setSelectedPricingId(p.id)}
-                  className={'w-full text-left p-4 rounded-2xl border-2 transition-all ' + (selectedPricingId===p.id?'border-primary bg-indigo-50':'border-zinc-100 bg-white')}>
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="font-semibold">{p.skill.name} — {p.type==='hourly'?'Per Session':p.sessions+' Sessions'}</p>
-                      <p className="text-zinc-500 text-sm">{p.durationMins} min</p>
-                    </div>
-                    <p className="text-xl font-extrabold text-primary">&#8377;{(p.amount/100).toLocaleString('en-IN')}</p>
-                  </div>
-                </button>
-              ))}
+          {expert.bio && <p className="mt-4 text-sm leading-6 text-slate-600">{expert.bio}</p>}
+
+          {expert.expertSkills.length > 0 && (
+            <div className="mt-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Skills</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {expert.expertSkills.map((skill) => (
+                  <span key={skill.id} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                    {skill.skill.name}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </section>
 
-        <div className="mt-6">
-          <h2 className="font-bold text-lg mb-3">Select Date</h2>
-          <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-2">
-            {dates.map(d => {
-              const ds = formatDate(d); const isSel = ds===selectedDate
+        <section className="mt-6">
+          <h2 className="text-lg font-semibold text-slate-900">Choose Pricing</h2>
+          <div className="mt-3 grid gap-3">
+            {expert.pricing.map((pricing) => (
+              <button
+                key={pricing.id}
+                onClick={() => setSelectedPricingId(pricing.id)}
+                className={`rounded-2xl border p-4 text-left shadow-card transition ${
+                  selectedPricingId === pricing.id ? 'border-primary bg-indigo-50' : 'border-slate-200 bg-white'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{pricing.skill.name}</p>
+                    <p className="text-xs text-slate-500">
+                      {pricing.type === 'package'
+                        ? `${pricing.sessions ?? 1} sessions · ${pricing.durationMins} min each`
+                        : `${pricing.durationMins} min session`}
+                    </p>
+                  </div>
+                  <p className="text-lg font-semibold text-slate-900">Rs {(pricing.amount / 100).toLocaleString('en-IN')}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="mt-6">
+          <h2 className="text-lg font-semibold text-slate-900">Select Date</h2>
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+            {dateOptions.map((date) => {
+              const dateKey = toDateKey(date)
+              const selected = selectedDate === dateKey
+
               return (
-                <button key={ds} onClick={() => setSelectedDate(ds)}
-                  className={'flex-shrink-0 flex flex-col items-center w-14 py-3 rounded-2xl transition-all ' + (isSel?'bg-primary text-white':'bg-white border border-zinc-100')}>
-                  <span className="text-xs font-semibold">{DAY_LABELS[d.getDay()]}</span>
-                  <span className="text-lg font-bold">{d.getDate()}</span>
+                <button
+                  key={dateKey}
+                  onClick={() => setSelectedDate(dateKey)}
+                  className={`min-w-[66px] rounded-2xl px-3 py-3 text-center ${
+                    selected ? 'bg-primary text-white' : 'bg-white text-slate-700 shadow-card'
+                  }`}
+                >
+                  <p className="text-xs font-semibold">{WEEKDAY[date.getDay()]}</p>
+                  <p className="mt-0.5 text-lg font-semibold">{date.getDate()}</p>
                 </button>
               )
             })}
           </div>
-        </div>
+        </section>
 
-        <div className="mt-6">
-          <h2 className="font-bold text-lg mb-3">Available Slots</h2>
-          {slotsLoading ? (
-            <div className="flex gap-3">{[1,2,3].map(i=><div key={i} className="h-12 w-24 bg-zinc-100 rounded-xl animate-pulse"/>)}</div>
-          ) : slots.length===0 ? (
-            <div className="bg-zinc-50 rounded-2xl p-5 text-center border border-zinc-100">
-              <span className="material-symbols-outlined text-3xl text-zinc-300 mb-2 block">event_busy</span>
-              <p className="text-zinc-500 text-sm font-medium">No slots available on this day</p>
-              <p className="text-zinc-400 text-xs mt-1">Try selecting a different date above</p>
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-3">
-              {slots.map(slot => (
-                <button key={slot.id} onClick={() => setSelectedSlot(slot)}
-                  className={'px-4 py-2.5 rounded-xl font-semibold text-sm border-2 transition-all ' + (selectedSlot?.id===slot.id?'bg-primary text-white border-primary':'bg-white text-on-surface border-zinc-200 hover:border-primary')}>
-                  {slot.startTime} - {slot.endTime}
-                </button>
+        <section className="mt-6">
+          <h2 className="text-lg font-semibold text-slate-900">Available Time Slots</h2>
+
+          {slotsLoading && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {[1, 2, 3, 4].map((slot) => (
+                <div key={slot} className="h-11 w-28 animate-pulse rounded-xl bg-slate-200" />
               ))}
             </div>
           )}
-        </div>
+
+          {!slotsLoading && slotsError && (
+            <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-4">
+              <p className="text-sm font-medium text-red-700">{slotsError}</p>
+            </div>
+          )}
+
+          {!slotsLoading && !slotsError && slots.length === 0 && (
+            <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-sm text-slate-600">No slots available on this date. Choose another date to continue.</p>
+            </div>
+          )}
+
+          {!slotsLoading && !slotsError && slots.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {slots.map((slot, index) => {
+                const key = `${slot.startTime}-${slot.endTime}-${index}`
+                const active = selectedSlot?.startTime === slot.startTime && selectedSlot?.endTime === slot.endTime
+
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setSelectedSlot({ startTime: slot.startTime, endTime: slot.endTime })}
+                    className={`rounded-xl border px-3 py-2 text-sm font-semibold ${
+                      active ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-700'
+                    }`}
+                  >
+                    {slot.startTime} - {slot.endTime}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </section>
 
         {reviews.length > 0 && (
-          <div className="mt-8 mb-8">
-            <h2 className="font-bold text-lg mb-3">Reviews ({reviews.length})</h2>
-            <div className="space-y-3">
-              {reviews.slice(0,5).map(r => (
-                <div key={r.id} className="bg-white rounded-2xl p-4 border border-zinc-100">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
-                      <span className="material-symbols-outlined text-sm text-indigo-400">person</span>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm">{r.reviewer.name||'Anonymous'}</p>
-                      <div className="flex">{Array.from({length:5}).map((_,i)=><span key={i} className={'text-xs '+(i<r.rating?'text-amber-400':'text-zinc-200')}>*</span>)}</div>
-                    </div>
+          <section className="mt-6">
+            <h2 className="text-lg font-semibold text-slate-900">Recent Reviews</h2>
+            <div className="mt-3 space-y-3">
+              {reviews.slice(0, 4).map((review) => (
+                <div key={review.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-slate-900">{review.reviewer.name || 'Learner'}</p>
+                    <p className="text-xs font-semibold text-amber-600">{review.rating}/5</p>
                   </div>
-                  {r.comment && <p className="text-sm text-on-surface-variant">{r.comment}</p>}
+                  {review.comment && <p className="mt-2 text-sm text-slate-600">{review.comment}</p>}
                 </div>
               ))}
             </div>
-          </div>
+          </section>
         )}
       </main>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-100 p-4">
-        <div className="max-w-2xl mx-auto">
-          <button onClick={handleBook} disabled={!selectedSlot||!selectedPricingId}
-            className="w-full bg-primary text-white font-bold py-4 rounded-2xl text-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-indigo-700 transition-colors">
-            {!user?'Sign in to Book':!selectedSlot?'Select a Slot':'Book Now'}
+      <div className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white p-4">
+        <div className="app-shell">
+          <button
+            onClick={handleBookSession}
+            disabled={!selectedPricingId || !selectedSlot}
+            className="w-full rounded-2xl bg-primary px-4 py-4 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {!user ? 'Sign in to book' : 'Book This Session'}
           </button>
         </div>
       </div>
