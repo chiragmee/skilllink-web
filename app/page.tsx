@@ -14,21 +14,24 @@ export default function DiscoverPage() {
   const [categories, setCategories] = useState<SkillCategory[]>([])
   const [activeCategory, setActiveCategory] = useState('')
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState('')
 
   useEffect(() => {
-    getCategories().then(setCategories).catch(console.error)
+    getCategories().then(setCategories).catch(() => {/* categories optional */})
     loadExperts()
   }, [])
 
   async function loadExperts(skill = '', category = '') {
     setLoading(true)
+    setFetchError('')
     try {
-      const params: Record<string, string> = { page: '1', limit: '10' }
+      const params: Record<string, string> = { page: '1', limit: '20' }
       if (skill) params.skill = skill
       if (category) params.category = category
       const data = await searchExperts(params)
       setExperts(data.experts || [])
     } catch {
+      setFetchError('Could not load experts. Please check your connection and try again.')
       setExperts([])
     } finally {
       setLoading(false)
@@ -37,7 +40,8 @@ export default function DiscoverPage() {
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault()
-    loadExperts(query)
+    const trimmed = query.trim()
+    loadExperts(trimmed)
   }
 
   function handleCategory(cat: SkillCategory) {
@@ -45,6 +49,8 @@ export default function DiscoverPage() {
     setActiveCategory(next)
     loadExperts('', next)
   }
+
+  const isFiltered = !!activeCategory || !!query.trim()
 
   return (
     <div className="bg-surface text-on-surface antialiased pb-28 min-h-screen">
@@ -88,9 +94,7 @@ export default function DiscoverPage() {
         {/* Categories */}
         {categories.length > 0 && (
           <section className="mb-12">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold tracking-tight">Popular Categories</h2>
-            </div>
+            <h2 className="text-xl font-bold tracking-tight mb-4">Popular Categories</h2>
             <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-4 -mx-6 px-6">
               {categories.map((cat) => (
                 <button
@@ -139,27 +143,73 @@ export default function DiscoverPage() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-2xl font-extrabold tracking-tight">
-                {activeCategory || query ? 'Results' : 'Experts'}
+                {isFiltered ? 'Search Results' : 'Experts Near You'}
               </h2>
-              <p className="text-zinc-500 text-sm mt-1">
-                {loading ? 'Loading…' : `${experts.length} expert${experts.length !== 1 ? 's' : ''} found`}
-              </p>
+              {!loading && !fetchError && (
+                <p className="text-zinc-500 text-sm mt-1">
+                  {experts.length === 0
+                    ? isFiltered ? 'No experts found for this search' : 'No experts yet'
+                    : `${experts.length} expert${experts.length !== 1 ? 's' : ''} found`}
+                </p>
+              )}
             </div>
+            {isFiltered && (
+              <button
+                onClick={() => { setQuery(''); setActiveCategory(''); loadExperts() }}
+                className="text-sm text-primary font-semibold flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-sm">close</span>
+                Clear
+              </button>
+            )}
           </div>
 
-          {loading ? (
+          {/* Error state */}
+          {fetchError && !loading && (
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-5 text-center">
+              <span className="material-symbols-outlined text-red-400 text-4xl mb-2 block">wifi_off</span>
+              <p className="text-red-700 font-semibold">{fetchError}</p>
+              <button
+                onClick={() => loadExperts(query, activeCategory)}
+                className="mt-3 px-5 py-2 bg-red-600 text-white rounded-xl text-sm font-semibold"
+              >
+                Try Again
+              </button>
+            </div>
+          )}
+
+          {/* Loading skeletons */}
+          {loading && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {[1, 2, 3, 4].map((i) => (
                 <div key={i} className="bg-surface-container-lowest rounded-[24px] p-5 h-36 animate-pulse" />
               ))}
             </div>
-          ) : experts.length === 0 ? (
+          )}
+
+          {/* Empty state */}
+          {!loading && !fetchError && experts.length === 0 && (
             <div className="text-center py-16 text-on-surface-variant">
               <span className="material-symbols-outlined text-5xl mb-4 block">search_off</span>
-              <p className="font-semibold text-lg">No experts found</p>
-              <p className="text-sm mt-1">Try a different skill or category</p>
+              <p className="font-semibold text-lg">
+                {isFiltered ? `No experts found for "${query || activeCategory}"` : 'No experts yet'}
+              </p>
+              <p className="text-sm mt-2 text-zinc-400">
+                {isFiltered ? 'Try a different skill or category' : 'Check back soon — experts are signing up!'}
+              </p>
+              {isFiltered && (
+                <button
+                  onClick={() => { setQuery(''); setActiveCategory(''); loadExperts() }}
+                  className="mt-4 px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold"
+                >
+                  See All Experts
+                </button>
+              )}
             </div>
-          ) : (
+          )}
+
+          {/* Expert cards */}
+          {!loading && !fetchError && experts.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {experts.map((expert) => {
                 const minPrice = expert.pricing.length > 0
@@ -172,7 +222,7 @@ export default function DiscoverPage() {
                     className="bg-surface-container-lowest rounded-[24px] p-5 shadow-editorial group hover:-translate-y-1 transition-all duration-300"
                   >
                     <div className="flex gap-5">
-                      <div className="relative w-24 h-24 flex-shrink-0">
+                      <div className="w-24 h-24 flex-shrink-0">
                         {expert.user.avatarUrl ? (
                           <img
                             src={expert.user.avatarUrl}
@@ -185,13 +235,13 @@ export default function DiscoverPage() {
                           </div>
                         )}
                       </div>
-                      <div className="flex-grow">
+                      <div className="flex-grow min-w-0">
                         <div className="flex justify-between items-start">
-                          <div>
-                            <h3 className="text-lg font-bold text-on-surface">
+                          <div className="min-w-0">
+                            <h3 className="text-lg font-bold text-on-surface truncate">
                               {expert.user.name || 'Expert'}
                             </h3>
-                            <p className="text-primary text-sm font-semibold">{skillNames || 'Multiple Skills'}</p>
+                            <p className="text-primary text-sm font-semibold truncate">{skillNames || 'Multiple Skills'}</p>
                             {expert.city && (
                               <p className="text-zinc-400 text-xs mt-0.5 flex items-center gap-1">
                                 <span className="material-symbols-outlined text-xs">location_on</span>
@@ -200,8 +250,8 @@ export default function DiscoverPage() {
                             )}
                           </div>
                           {expert.totalReviews > 0 && (
-                            <div className="flex items-center gap-1 bg-secondary-fixed text-on-secondary-fixed px-2 py-1 rounded-lg">
-                              <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                            <div className="flex items-center gap-1 bg-amber-50 text-amber-700 px-2 py-1 rounded-lg flex-shrink-0 ml-2">
+                              <span className="material-symbols-outlined text-sm text-amber-500" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
                               <span className="text-xs font-bold">{Number(expert.avgRating).toFixed(1)}</span>
                             </div>
                           )}
@@ -210,13 +260,13 @@ export default function DiscoverPage() {
                           <div>
                             {minPrice !== null ? (
                               <>
-                                <span className="text-zinc-400 text-xs uppercase font-bold tracking-widest block mb-1">From</span>
+                                <span className="text-zinc-400 text-xs uppercase font-bold tracking-widest block mb-0.5">From</span>
                                 <span className="text-xl font-extrabold text-on-surface">
                                   ₹{(minPrice / 100).toLocaleString('en-IN')}
                                 </span>
                               </>
                             ) : (
-                              <span className="text-zinc-400 text-sm">No pricing set</span>
+                              <span className="text-zinc-400 text-sm">Contact for pricing</span>
                             )}
                           </div>
                           <Link

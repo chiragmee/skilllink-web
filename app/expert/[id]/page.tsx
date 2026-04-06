@@ -28,15 +28,21 @@ export default function ExpertPage() {
   useEffect(() => {
     Promise.all([getExpert(id), getExpertReviews(id)])
       .then(([exp, revs]) => {
-        setExpert(exp); setReviews(revs)
-        if (exp.pricing.length > 0) setSelectedPricingId(exp.pricing[0].id)
-      }).catch(console.error).finally(() => setLoading(false))
+        setExpert(exp)
+        setReviews(Array.isArray(revs) ? revs : [])
+        if (exp?.pricing?.length > 0) setSelectedPricingId(exp.pricing[0].id)
+      })
+      .catch(() => setExpert(null))
+      .finally(() => setLoading(false))
   }, [id])
 
   useEffect(() => {
     if (!id) return
     setSlotsLoading(true)
-    getAvailableSlots(id, selectedDate).then(setSlots).catch(() => setSlots([])).finally(() => setSlotsLoading(false))
+    getAvailableSlots(id, selectedDate)
+      .then(data => setSlots(Array.isArray(data) ? data : []))
+      .catch(() => setSlots([]))
+      .finally(() => setSlotsLoading(false))
     setSelectedSlot(null)
   }, [id, selectedDate])
 
@@ -60,9 +66,11 @@ export default function ExpertPage() {
     </div>
   )
   if (!expert) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-center"><p className="text-xl font-bold mb-2">Expert not found</p>
-      <Link href="/" className="text-primary underline">Back to Home</Link></div>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-surface px-6 text-center">
+      <span className="material-symbols-outlined text-5xl text-zinc-300 mb-4">person_off</span>
+      <p className="text-xl font-bold mb-2">Expert not found</p>
+      <p className="text-zinc-400 text-sm mb-6">This profile may have been removed or the link is incorrect.</p>
+      <Link href="/" className="px-6 py-3 bg-primary text-white rounded-2xl font-bold">Browse Experts</Link>
     </div>
   )
 
@@ -142,7 +150,11 @@ export default function ExpertPage() {
           {slotsLoading ? (
             <div className="flex gap-3">{[1,2,3].map(i=><div key={i} className="h-12 w-24 bg-zinc-100 rounded-xl animate-pulse"/>)}</div>
           ) : slots.length===0 ? (
-            <p className="text-zinc-400 text-sm">No slots available on this date. Try another date.</p>
+            <div className="bg-zinc-50 rounded-2xl p-5 text-center border border-zinc-100">
+              <span className="material-symbols-outlined text-3xl text-zinc-300 mb-2 block">event_busy</span>
+              <p className="text-zinc-500 text-sm font-medium">No slots available on this day</p>
+              <p className="text-zinc-400 text-xs mt-1">Try selecting a different date above</p>
+            </div>
           ) : (
             <div className="flex flex-wrap gap-3">
               {slots.map(slot => (
