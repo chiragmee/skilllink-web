@@ -7,14 +7,12 @@ type NavItem = { label: string; icon: string; href: string }
 const learnerNav: NavItem[] = [
   { label: 'Discover', icon: 'explore', href: '/' },
   { label: 'Bookings', icon: 'event_note', href: '/bookings' },
-  { label: 'Chat', icon: 'chat_bubble', href: '/chat' },
   { label: 'Profile', icon: 'person', href: '/profile' },
 ]
 
 const expertNav: NavItem[] = [
   { label: 'Dashboard', icon: 'dashboard', href: '/dashboard' },
   { label: 'Bookings', icon: 'event_note', href: '/bookings' },
-  { label: 'Chat', icon: 'chat_bubble', href: '/chat' },
   { label: 'Profile', icon: 'person', href: '/profile' },
 ]
 
@@ -25,7 +23,7 @@ export default function BottomNav({ mode = 'learner' }: { mode?: 'learner' | 'ex
   return (
     <nav className="fixed bottom-0 w-full z-50 flex justify-around items-center px-4 pb-6 pt-3 glass-nav shadow-bottom-nav rounded-t-3xl">
       {items.map((item) => {
-        const isActive = pathname === item.href
+        const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
         return (
           <Link
             key={item.href}

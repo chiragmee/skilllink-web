@@ -56,14 +56,7 @@ export default function TopBar({ variant = 'home', backHref = '/' }: TopBarProps
         </Link>
         <span className="text-2xl font-bold text-indigo-800 tracking-tight font-headline">SkillLink</span>
       </div>
-      <div className="flex items-center gap-2">
-        <button className="p-2 hover:bg-zinc-100 rounded-full transition-colors">
-          <span className="material-symbols-outlined text-zinc-500">share</span>
-        </button>
-        <button className="p-2 hover:bg-zinc-100 rounded-full transition-colors">
-          <span className="material-symbols-outlined text-zinc-500">favorite</span>
-        </button>
-      </div>
+      <div />
     </header>
   )
 }

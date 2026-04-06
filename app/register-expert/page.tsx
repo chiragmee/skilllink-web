@@ -327,7 +327,10 @@ export default function RegisterExpertPage() {
           )}
           {step < 4 ? (
             <button onClick={() => setStep(s => s+1)}
-              disabled={step===1 && (!bio.trim()||!city.trim())}
+              disabled={
+                (step===1 && (!bio.trim()||!city.trim())) ||
+                (step===2 && selectedSkills.length===0)
+              }
               className="flex-1 py-4 bg-primary text-white font-bold rounded-2xl text-lg disabled:opacity-40">
               Continue
             </button>

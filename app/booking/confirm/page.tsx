@@ -15,6 +15,7 @@ function ConfirmContent() {
   const router = useRouter()
   const { user } = useAuth()
 
+  const existingBookingId = params.get('bookingId') || ''
   const expertId = params.get('expertId') || ''
   const pricingId = params.get('pricingId') || ''
   const date = params.get('date') || ''
@@ -36,11 +37,15 @@ function ConfirmContent() {
     setStep('paying')
     setErrorMsg('')
     try {
-      // 1. Create booking
-      const booking = await createBooking({ expertId, pricingId, slotDate: date, slotStart: start, slotEnd: end, mode: mode as 'online'|'offline' })
+      // Use existing booking (from bookings page) or create new one
+      let bookingId = existingBookingId
+      if (!bookingId) {
+        const booking = await createBooking({ expertId, pricingId, slotDate: date, slotStart: start, slotEnd: end, mode: mode as 'online'|'offline' })
+        bookingId = booking.id
+      }
 
       // 2. Initiate payment
-      const payData = await initiatePayment(booking.id)
+      const payData = await initiatePayment(bookingId)
 
       // 3. Load Razorpay script
       await new Promise<void>((resolve, reject) => {

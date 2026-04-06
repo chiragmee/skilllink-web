@@ -56,8 +56,9 @@ export default function BookingsPage() {
     setSubmitting(true)
     try {
       await submitReview({ bookingId: reviewBookingId, rating: reviewRating, comment: reviewComment })
+      const updated = await listBookings('learner')
+      setBookings(updated)
       setReviewBookingId(null)
-      alert('Review submitted!')
     } catch (err: any) { alert(err.message) }
     finally { setSubmitting(false) }
   }
@@ -113,7 +114,16 @@ export default function BookingsPage() {
                   )}
                   <div className="flex gap-2 flex-wrap">
                     {b.status === 'accepted' && (
-                      <Link href={'/booking/confirm?bookingId='+b.id}
+                      <Link href={'/booking/confirm?' + new URLSearchParams({
+                        bookingId: b.id,
+                        expertId: b.expertId,
+                        pricingId: b.pricingId,
+                        date: new Date(b.slotDate).toISOString().split('T')[0],
+                        start: b.slotStart, end: b.slotEnd, mode: b.mode,
+                        expertName: b.expert?.user?.name || 'Expert',
+                        amount: String(b.pricing?.amount || 0),
+                        duration: String(b.pricing?.durationMins || 60),
+                      }).toString()}
                         className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-semibold">
                         Pay Now
                       </Link>
