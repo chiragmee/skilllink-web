@@ -79,10 +79,12 @@ export default function LoginPage() {
         </div>
 
         {/* For experts */}
-        <p className="text-center text-sm text-on-surface-variant mt-6">
-          Want to teach?{' '}
-          <span className="text-primary font-semibold">Sign in and register as an Expert →</span>
-        </p>
+        <button
+          onClick={signInWithGoogle}
+          className="w-full text-center text-sm text-on-surface-variant mt-6 py-2 hover:text-primary transition-colors"
+        >
+          Want to teach? <span className="text-primary font-semibold">Sign in and register as an Expert →</span>
+        </button>
       </div>
     </div>
   )
