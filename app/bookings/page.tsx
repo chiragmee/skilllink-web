@@ -36,6 +36,7 @@ export default function BookingsPage() {
   const [fetchError, setFetchError] = useState('')
   const [tab, setTab] = useState<'all' | 'upcoming' | 'completed'>('all')
   const [reviewBookingId, setReviewBookingId] = useState<string | null>(null)
+  const [cancelBookingId, setCancelBookingId] = useState<string | null>(null)
   const [reviewRating, setReviewRating] = useState(5)
   const [reviewComment, setReviewComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -65,7 +66,13 @@ export default function BookingsPage() {
   })
 
   async function handleCancel(id: string) {
-    if (!window.confirm('Cancel this booking? This cannot be undone.')) return
+    setCancelBookingId(id)
+  }
+
+  async function confirmCancel() {
+    if (!cancelBookingId) return
+    const id = cancelBookingId
+    setCancelBookingId(null)
     setSubmitting(true)
     try {
       await cancelBooking(id, 'Cancelled by learner')
@@ -185,7 +192,7 @@ export default function BookingsPage() {
                         Complete Payment
                       </Link>
                     )}
-                    {b.status === 'completed' && !b.payment && (
+                    {b.status === 'completed' && (
                       <button onClick={() => { setReviewBookingId(b.id); setReviewRating(5); setReviewComment('') }}
                         className="px-4 py-2 bg-amber-50 text-amber-700 rounded-xl text-sm font-semibold border border-amber-200">
                         Leave Review
@@ -204,6 +211,26 @@ export default function BookingsPage() {
           </div>
         )}
       </main>
+
+      {/* Cancel confirmation modal */}
+      {cancelBookingId && (
+        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg p-6">
+            <h2 className="font-bold text-xl mb-1">Cancel Booking?</h2>
+            <p className="text-zinc-500 text-sm mb-6">This action cannot be undone. Are you sure you want to cancel this session?</p>
+            <div className="flex gap-3">
+              <button onClick={() => setCancelBookingId(null)} disabled={submitting}
+                className="flex-1 py-3 border border-zinc-200 rounded-xl font-semibold text-sm">
+                Keep Booking
+              </button>
+              <button onClick={confirmCancel} disabled={submitting}
+                className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold text-sm disabled:opacity-60">
+                {submitting ? 'Cancelling…' : 'Yes, Cancel'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Review modal */}
       {reviewBookingId && (

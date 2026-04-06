@@ -8,12 +8,29 @@ export default function AuthCallback() {
   const router = useRouter()
 
   useEffect(() => {
-    // Supabase client auto-exchanges the code from URL params
-    supabase.auth.getSession().then(() => {
-      // onAuthStateChange in AuthProvider handles the rest
-      // Give it a moment to process
-      setTimeout(() => router.replace('/'), 500)
+    // Exchange the OAuth code for a Supabase session.
+    // onAuthStateChange in AuthProvider will fire SIGNED_IN which triggers
+    // token exchange with our backend. We listen here for the session to
+    // be established before redirecting so we don't race.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+          subscription.unsubscribe()
+          router.replace('/')
+        }
+      }
+    )
+
+    // Kick off the session exchange (Supabase auto-reads the code from URL)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      // If session already available (e.g. code already exchanged), redirect now
+      if (session) {
+        subscription.unsubscribe()
+        router.replace('/')
+      }
     })
+
+    return () => subscription.unsubscribe()
   }, [router])
 
   return (

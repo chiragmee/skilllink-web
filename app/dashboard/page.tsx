@@ -196,7 +196,7 @@ export default function DashboardPage() {
                       {isPending ? 'Updating…' : 'Mark Complete'}
                     </button>
                   )}
-                  {['requested', 'accepted', 'confirmed'].includes(b.status) && (
+                  {['accepted', 'confirmed'].includes(b.status) && (
                     <button onClick={() => handleAction(b.id, 'cancel')} disabled={isPending}
                       className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-sm font-semibold border border-red-200 disabled:opacity-50">
                       Cancel
