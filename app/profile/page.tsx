@@ -1,68 +1,108 @@
-import Image from 'next/image'
+'use client'
+
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import BottomNav from '@/components/BottomNav'
-
-const menuItems = [
-  { icon: 'swap_horiz', label: 'Switch to Expert Mode', href: '/dashboard' },
-  { icon: 'event_note', label: 'My Bookings', href: '/bookings' },
-  { icon: 'payments', label: 'Payment History', href: '#' },
-  { icon: 'bookmark', label: 'Saved Experts', href: '#' },
-  { icon: 'help_outline', label: 'Help Center', href: '#' },
-  { icon: 'settings', label: 'Settings', href: '#' },
-]
+import TopBar from '@/components/TopBar'
+import { useAuth } from '@/lib/auth-context'
 
 export default function ProfilePage() {
-  return (
-    <div className="bg-surface text-on-surface min-h-screen pb-28">
-      <header className="fixed top-0 w-full flex justify-between items-center px-6 py-3 glass-nav z-50">
-        <span className="text-2xl font-bold text-indigo-800 tracking-tight font-headline">Profile</span>
-        <button className="p-2 hover:bg-zinc-100 rounded-full">
-          <span className="material-symbols-outlined text-zinc-500">settings</span>
-        </button>
-      </header>
+  const { user, loading, signOut } = useAuth()
+  const router = useRouter()
 
-      <main className="pt-20 px-6 max-w-2xl mx-auto">
-        {/* Profile Card */}
-        <div className="bg-surface-container-lowest rounded-[24px] p-6 shadow-editorial mb-8 flex items-center gap-5 mt-4">
-          <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-indigo-100 flex-shrink-0">
-            <Image
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuD1euOOu7515_Z1ENdmtF-MuRqcyOTSyhP6j5C3sJF5qtPncE2iyKj_IurdMs9e9oOWGnbb5aB1XMXXg81Cc2OL8qVN18AaNLOepLwYOaHyBUWqIO5ndaTbkz3N4oAPUllhWFLuTW8a3X1FgH1jZdcNZHS9_Reue6u9gXHPfSXJWwEKBSMj8g3SJ3uVWjnB5dAjOnqYQC7PKpW-ur-5jczd191UrygGAgcc28ICamt1IF7olb7njPn1A12j12vlthdS7Ji-rZ5Xw7A"
-              alt="Profile"
-              width={64}
-              height={64}
-              className="w-full h-full object-cover"
-            />
+  useEffect(() => {
+    if (!loading && !user) router.replace('/login')
+  }, [user, loading, router])
+
+  if (loading || !user) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin"/>
+    </div>
+  )
+
+  return (
+    <div className="bg-surface min-h-screen pb-28">
+      <TopBar variant="back" />
+      <main className="mt-16 max-w-lg mx-auto px-4">
+        <div className="bg-white rounded-3xl p-6 mt-4 border border-zinc-100 flex items-center gap-4">
+          <div className="w-16 h-16 flex-shrink-0">
+            {user.avatarUrl ? (
+              <img src={user.avatarUrl} alt={user.name||''} className="w-full h-full object-cover rounded-2xl"/>
+            ) : (
+              <div className="w-full h-full bg-indigo-100 rounded-2xl flex items-center justify-center">
+                <span className="material-symbols-outlined text-indigo-400 text-3xl">person</span>
+              </div>
+            )}
           </div>
           <div>
-            <h2 className="text-xl font-bold font-headline text-on-surface">Aravind Kumar</h2>
-            <p className="text-sm text-zinc-500">Learner & Enthusiast</p>
-            <p className="text-xs text-indigo-700 font-medium mt-1">+91 98765 43210</p>
+            <h1 className="text-xl font-bold">{user.name || 'User'}</h1>
+            <p className="text-zinc-500 text-sm">{user.email}</p>
+            <span className="inline-block mt-1 bg-indigo-50 text-indigo-700 text-xs font-semibold px-2 py-0.5 rounded-lg capitalize">{user.role}</span>
           </div>
         </div>
 
-        {/* Menu */}
-        <nav className="space-y-2">
-          {menuItems.map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              className="flex items-center gap-4 p-4 bg-surface-container-lowest rounded-2xl hover:bg-indigo-50 transition-colors group"
-            >
-              <div className="w-10 h-10 bg-surface-container-low rounded-xl flex items-center justify-center group-hover:bg-indigo-100 transition-colors">
-                <span className="material-symbols-outlined text-zinc-500 group-hover:text-indigo-700">{item.icon}</span>
+        <div className="mt-4 bg-white rounded-3xl border border-zinc-100 overflow-hidden">
+          {!user.expertProfileId && (
+            <Link href="/register-expert" className="flex items-center justify-between p-5 hover:bg-zinc-50 transition-colors border-b border-zinc-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+                  <span className="material-symbols-outlined text-indigo-600">workspace_premium</span>
+                </div>
+                <div>
+                  <p className="font-semibold">Become an Expert</p>
+                  <p className="text-zinc-400 text-xs">List your skills and start earning</p>
+                </div>
               </div>
-              <span className="font-medium text-on-surface group-hover:text-indigo-700 transition-colors">{item.label}</span>
-              <span className="material-symbols-outlined text-zinc-300 ml-auto">chevron_right</span>
+              <span className="material-symbols-outlined text-zinc-400">chevron_right</span>
             </Link>
-          ))}
-        </nav>
+          )}
+          {user.expertProfileId && (
+            <Link href="/dashboard" className="flex items-center justify-between p-5 hover:bg-zinc-50 transition-colors border-b border-zinc-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                  <span className="material-symbols-outlined text-green-600">dashboard</span>
+                </div>
+                <p className="font-semibold">Expert Dashboard</p>
+              </div>
+              <span className="material-symbols-outlined text-zinc-400">chevron_right</span>
+            </Link>
+          )}
+          <Link href="/bookings" className="flex items-center justify-between p-5 hover:bg-zinc-50 transition-colors border-b border-zinc-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                <span className="material-symbols-outlined text-blue-600">calendar_month</span>
+              </div>
+              <p className="font-semibold">My Bookings</p>
+            </div>
+            <span className="material-symbols-outlined text-zinc-400">chevron_right</span>
+          </Link>
+          <Link href="/terms-of-service" className="flex items-center justify-between p-5 hover:bg-zinc-50 transition-colors border-b border-zinc-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-zinc-100 rounded-xl flex items-center justify-center">
+                <span className="material-symbols-outlined text-zinc-600">gavel</span>
+              </div>
+              <p className="font-semibold">Terms of Service</p>
+            </div>
+            <span className="material-symbols-outlined text-zinc-400">chevron_right</span>
+          </Link>
+          <Link href="/privacy-policy" className="flex items-center justify-between p-5 hover:bg-zinc-50 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-zinc-100 rounded-xl flex items-center justify-center">
+                <span className="material-symbols-outlined text-zinc-600">privacy_tip</span>
+              </div>
+              <p className="font-semibold">Privacy Policy</p>
+            </div>
+            <span className="material-symbols-outlined text-zinc-400">chevron_right</span>
+          </Link>
+        </div>
 
-        <button className="w-full mt-8 py-4 bg-error/10 text-error rounded-2xl font-semibold text-sm">
-          Log Out
+        <button onClick={signOut}
+          className="mt-4 w-full py-4 bg-red-50 text-red-600 font-bold rounded-2xl border border-red-200 hover:bg-red-100 transition-colors">
+          Sign Out
         </button>
       </main>
-
-      <BottomNav mode="learner" />
+      <BottomNav mode={user.expertProfileId ? 'expert' : 'learner'} />
     </div>
   )
 }

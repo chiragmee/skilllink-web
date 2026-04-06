@@ -3,6 +3,7 @@ import { Inter, Plus_Jakarta_Sans } from 'next/font/google'
 import './globals.css'
 import ServerWakeBanner from '@/components/ServerWakeBanner'
 import ServiceWorkerInit from '@/components/ServiceWorkerInit'
+import Providers from '@/components/Providers'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -38,9 +39,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <ServiceWorkerInit />
-        <ServerWakeBanner />
-        {children}
+        <Providers>
+          <ServiceWorkerInit />
+          <ServerWakeBanner />
+          {children}
+        </Providers>
       </body>
     </html>
   )

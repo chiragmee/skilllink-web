@@ -1,216 +1,189 @@
-import Image from 'next/image'
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import TopBar from '@/components/TopBar'
+import { getExpert, getAvailableSlots, getExpertReviews, type Expert, type AvailabilitySlot } from '@/lib/api'
+import { useAuth } from '@/lib/auth-context'
 
-const days = [
-  { day: 'Mon', date: '12', active: true },
-  { day: 'Tue', date: '13' },
-  { day: 'Wed', date: '14' },
-  { day: 'Thu', date: '15' },
-  { day: 'Fri', date: '16' },
-  { day: 'Sat', date: '17' },
-]
+function formatDate(d: Date) { return d.toISOString().split('T')[0] }
+function addDays(d: Date, n: number) { const r = new Date(d); r.setDate(r.getDate() + n); return r }
+const DAY_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 
-const morningSlots = ['07:00 AM', '08:30 AM', '10:00 AM']
-const eveningSlots = ['05:00 PM', '06:30 PM', '08:00 PM']
-const bookedSlots = new Set(['06:30 PM'])
+export default function ExpertPage() {
+  const { id } = useParams<{ id: string }>()
+  const router = useRouter()
+  const { user } = useAuth()
+  const [expert, setExpert] = useState<Expert | null>(null)
+  const [reviews, setReviews] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const today = new Date()
+  const [selectedDate, setSelectedDate] = useState(formatDate(today))
+  const [slots, setSlots] = useState<AvailabilitySlot[]>([])
+  const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null)
+  const [selectedPricingId, setSelectedPricingId] = useState('')
+  const [slotsLoading, setSlotsLoading] = useState(false)
 
-const skills = ['Badminton Professional', 'Fitness Training', 'Sports Nutrition', 'Footwork Drills']
+  useEffect(() => {
+    Promise.all([getExpert(id), getExpertReviews(id)])
+      .then(([exp, revs]) => {
+        setExpert(exp); setReviews(revs)
+        if (exp.pricing.length > 0) setSelectedPricingId(exp.pricing[0].id)
+      }).catch(console.error).finally(() => setLoading(false))
+  }, [id])
 
-export default function ExpertProfilePage() {
+  useEffect(() => {
+    if (!id) return
+    setSlotsLoading(true)
+    getAvailableSlots(id, selectedDate).then(setSlots).catch(() => setSlots([])).finally(() => setSlotsLoading(false))
+    setSelectedSlot(null)
+  }, [id, selectedDate])
+
+  function handleBook() {
+    if (!user) { router.push('/login'); return }
+    if (!selectedSlot || !selectedPricingId) return
+    const pricing = expert?.pricing.find(p => p.id === selectedPricingId)
+    const params = new URLSearchParams({
+      expertId: id, pricingId: selectedPricingId, date: selectedDate,
+      start: selectedSlot.startTime, end: selectedSlot.endTime,
+      mode: expert?.mode === 'offline' ? 'offline' : 'online',
+      expertName: expert?.user.name || '', amount: String(pricing?.amount || 0),
+      duration: String(pricing?.durationMins || 60),
+    })
+    router.push('/booking/confirm?' + params.toString())
+  }
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+    </div>
+  )
+  if (!expert) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center"><p className="text-xl font-bold mb-2">Expert not found</p>
+      <Link href="/" className="text-primary underline">Back to Home</Link></div>
+    </div>
+  )
+
+  const dates = Array.from({ length: 7 }, (_, i) => addDays(today, i))
+
   return (
-    <div className="bg-surface text-on-surface mb-32 min-h-screen">
-      <TopBar variant="back" backHref="/" />
-
-      <main className="pt-20 px-6 max-w-2xl mx-auto">
-
-        {/* Hero with Overlapping Card — Editorial Asymmetry */}
-        <section className="relative mb-12">
-          <div className="w-full h-80 rounded-3xl overflow-hidden shadow-sm relative">
-            <Image
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuB-60xaMKCvV7WDEQvdRQOumfLUNfPKOcPD6IHYwQnXEO4I7cvdIyYhePJzRRxUJO95RDhwY6pGIA7JHHmfOk-4PzSQrJDl-F1mMy9to2xZXbCKymFkBsdymjMt6bWm1OT-_1FV7sgOgFh4fAFqWo4XIEdpq8Q1MbW9SLs6LhY6tVwr7m_0z68wgOAwPZ91YOx473Qf6I-iNk2OftdAsRYJQhenNYsQ0GaSmJb_zldcOjSDshzx5NpVzbTQiCYp0vI2orbPKmNt7cE"
-              alt="Rajesh M."
-              fill
-              className="object-cover"
-              priority
-            />
-          </div>
-
-          {/* Overlapping profile card */}
-          <div className="absolute -bottom-10 left-6 right-6 bg-surface-container-lowest p-6 rounded-3xl shadow-editorial">
-            <div className="flex justify-between items-start">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <h2 className="text-2xl font-extrabold text-on-surface tracking-tight font-headline">Rajesh M.</h2>
-                  <div className="bg-tertiary-container text-on-tertiary-container px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[14px]"
-                      style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
-                    <span className="text-[10px] font-bold tracking-wider uppercase">VERIFIED</span>
-                  </div>
+    <div className="bg-surface text-on-surface min-h-screen pb-32">
+      <TopBar variant="back" />
+      <main className="mt-16 max-w-2xl mx-auto px-4">
+        <div className="bg-white rounded-3xl p-6 shadow-editorial mt-4">
+          <div className="flex gap-5 items-start">
+            <div className="w-20 h-20 flex-shrink-0">
+              {expert.user.avatarUrl ? (
+                <img src={expert.user.avatarUrl} alt={expert.user.name||''} className="w-full h-full object-cover rounded-2xl" />
+              ) : (
+                <div className="w-full h-full bg-indigo-100 rounded-2xl flex items-center justify-center">
+                  <span className="material-symbols-outlined text-indigo-400 text-3xl">person</span>
                 </div>
-                <p className="text-indigo-700 font-semibold mb-2">Professional Badminton Coach</p>
-                <div className="flex items-center gap-1 bg-surface-container-low w-fit px-2 py-1 rounded-lg">
-                  <span className="material-symbols-outlined text-secondary text-sm"
-                    style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                  <span className="text-sm font-bold">4.9/5</span>
-                  <span className="text-xs text-zinc-500 ml-1">(124 Reviews)</span>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.1em] mb-1">EXPERIENCE</p>
-                <p className="text-xl font-bold text-indigo-800 font-headline">12+ Years</p>
+              )}
+            </div>
+            <div className="flex-grow">
+              <h1 className="text-xl font-bold">{expert.user.name}</h1>
+              <p className="text-primary font-semibold text-sm">{expert.expertSkills.map(es => es.skill.name).join(' · ')}</p>
+              {expert.city && <p className="text-zinc-400 text-xs mt-1 flex items-center gap-1"><span className="material-symbols-outlined text-xs">location_on</span>{expert.city}</p>}
+              <div className="flex gap-4 mt-2">
+                {expert.totalReviews > 0 && (
+                  <span className="text-sm font-semibold flex items-center gap-1">
+                    <span className="material-symbols-outlined text-amber-400 text-sm" style={{fontVariationSettings:"'FILL' 1"}}>star</span>
+                    {Number(expert.avgRating).toFixed(1)} ({expert.totalReviews})
+                  </span>
+                )}
+                <span className="text-sm text-zinc-500 capitalize">{expert.mode} sessions</span>
               </div>
             </div>
           </div>
-        </section>
+          {expert.bio && <p className="mt-4 text-on-surface-variant text-sm leading-relaxed">{expert.bio}</p>}
+        </div>
 
-        {/* Bio & Skills */}
-        <section className="mt-16 space-y-8">
-          <div className="space-y-3">
-            <h3 className="text-lg font-bold text-on-surface font-headline">About the Coach</h3>
-            <p className="text-zinc-600 leading-relaxed">
-              National-level badminton player turned coach. I specialize in helping intermediate players master their
-              footwork and aggressive smash techniques. My training philosophy focuses on explosive movement and mental
-              resilience on court.
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            <h3 className="text-lg font-bold text-on-surface font-headline">Core Skills</h3>
-            <div className="flex flex-wrap gap-3">
-              {skills.map((s) => (
-                <span key={s} className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-2xl text-sm font-medium">
-                  {s}
-                </span>
+        {expert.pricing.length > 0 && (
+          <div className="mt-6">
+            <h2 className="font-bold text-lg mb-3">Choose a Plan</h2>
+            <div className="grid grid-cols-1 gap-3">
+              {expert.pricing.map(p => (
+                <button key={p.id} onClick={() => setSelectedPricingId(p.id)}
+                  className={'w-full text-left p-4 rounded-2xl border-2 transition-all ' + (selectedPricingId===p.id?'border-primary bg-indigo-50':'border-zinc-100 bg-white')}>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="font-semibold">{p.skill.name} — {p.type==='hourly'?'Per Session':p.sessions+' Sessions'}</p>
+                      <p className="text-zinc-500 text-sm">{p.durationMins} min</p>
+                    </div>
+                    <p className="text-xl font-extrabold text-primary">&#8377;{(p.amount/100).toLocaleString('en-IN')}</p>
+                  </div>
+                </button>
               ))}
             </div>
           </div>
-        </section>
+        )}
 
-        {/* Pricing Plans */}
-        <section className="mt-12 space-y-4">
-          <h3 className="text-lg font-bold text-on-surface font-headline">Pricing Plans</h3>
-          <div className="grid grid-cols-2 gap-4">
-            {/* Hourly */}
-            <div className="bg-surface-container-low p-5 rounded-3xl border-2 border-transparent hover:border-indigo-200 transition-all cursor-pointer group">
-              <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center mb-4 shadow-sm group-hover:scale-110 transition-transform">
-                <span className="material-symbols-outlined text-indigo-700">timer</span>
-              </div>
-              <p className="text-sm font-semibold text-zinc-500 mb-1">Hourly</p>
-              <p className="text-2xl font-extrabold text-on-surface font-headline">₹500</p>
-              <p className="text-xs text-zinc-400 mt-2">Single session focus</p>
-            </div>
-
-            {/* Package — Popular */}
-            <div className="bg-primary-container p-5 rounded-3xl border-2 border-primary transition-all cursor-pointer shadow-lg shadow-indigo-100 relative overflow-hidden">
-              <div className="absolute top-0 right-0 bg-secondary-container text-on-secondary-container text-[10px] font-bold px-3 py-1 rounded-bl-xl">
-                POPULAR
-              </div>
-              <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center mb-4">
-                <span className="material-symbols-outlined text-white">layers</span>
-              </div>
-              <p className="text-sm font-semibold text-indigo-100 mb-1">Package</p>
-              <p className="text-2xl font-extrabold text-white font-headline">₹2200</p>
-              <p className="text-xs text-indigo-200 mt-2">5 sessions (Save ₹300)</p>
-            </div>
+        <div className="mt-6">
+          <h2 className="font-bold text-lg mb-3">Select Date</h2>
+          <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-2">
+            {dates.map(d => {
+              const ds = formatDate(d); const isSel = ds===selectedDate
+              return (
+                <button key={ds} onClick={() => setSelectedDate(ds)}
+                  className={'flex-shrink-0 flex flex-col items-center w-14 py-3 rounded-2xl transition-all ' + (isSel?'bg-primary text-white':'bg-white border border-zinc-100')}>
+                  <span className="text-xs font-semibold">{DAY_LABELS[d.getDay()]}</span>
+                  <span className="text-lg font-bold">{d.getDate()}</span>
+                </button>
+              )
+            })}
           </div>
-        </section>
+        </div>
 
-        {/* Availability */}
-        <section className="mt-12 mb-8 space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-bold text-on-surface font-headline">Availability</h3>
-            <button className="text-primary text-sm font-bold flex items-center gap-1">
-              October 2023{' '}
-              <span className="material-symbols-outlined text-sm">calendar_month</span>
-            </button>
-          </div>
-
-          {/* Date Picker */}
-          <div className="flex gap-3 overflow-x-auto pb-2 hide-scrollbar">
-            {days.map((d) => (
-              <button
-                key={d.date}
-                className={`flex-shrink-0 w-16 h-20 rounded-2xl flex flex-col items-center justify-center transition-colors ${
-                  d.active
-                    ? 'bg-indigo-700 text-white shadow-md'
-                    : 'bg-surface-container-low text-on-surface hover:bg-zinc-200'
-                }`}
-              >
-                <span className={`text-xs font-medium uppercase ${d.active ? 'opacity-80' : 'text-zinc-400'}`}>
-                  {d.day}
-                </span>
-                <span className="text-xl font-bold">{d.date}</span>
-              </button>
-            ))}
-          </div>
-
-          <div className="space-y-6 mt-6">
-            {/* Morning */}
-            <div>
-              <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                <span className="material-symbols-outlined text-sm">wb_sunny</span> Morning Slots
-              </p>
-              <div className="grid grid-cols-3 gap-3">
-                {morningSlots.map((slot, i) => (
-                  <button
-                    key={slot}
-                    className={`py-2.5 rounded-xl text-sm font-semibold transition-all border ${
-                      i === 1
-                        ? 'bg-indigo-50 text-indigo-700 border-2 border-indigo-200 font-bold'
-                        : 'bg-surface-container-low border-transparent hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-100'
-                    }`}
-                  >
-                    {slot}
-                  </button>
-                ))}
-              </div>
+        <div className="mt-6">
+          <h2 className="font-bold text-lg mb-3">Available Slots</h2>
+          {slotsLoading ? (
+            <div className="flex gap-3">{[1,2,3].map(i=><div key={i} className="h-12 w-24 bg-zinc-100 rounded-xl animate-pulse"/>)}</div>
+          ) : slots.length===0 ? (
+            <p className="text-zinc-400 text-sm">No slots available on this date. Try another date.</p>
+          ) : (
+            <div className="flex flex-wrap gap-3">
+              {slots.map(slot => (
+                <button key={slot.id} onClick={() => setSelectedSlot(slot)}
+                  className={'px-4 py-2.5 rounded-xl font-semibold text-sm border-2 transition-all ' + (selectedSlot?.id===slot.id?'bg-primary text-white border-primary':'bg-white text-on-surface border-zinc-200 hover:border-primary')}>
+                  {slot.startTime} - {slot.endTime}
+                </button>
+              ))}
             </div>
+          )}
+        </div>
 
-            {/* Evening */}
-            <div>
-              <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                <span className="material-symbols-outlined text-sm">dark_mode</span> Evening Slots
-              </p>
-              <div className="grid grid-cols-3 gap-3">
-                {eveningSlots.map((slot) => {
-                  const booked = bookedSlots.has(slot)
-                  return (
-                    <button
-                      key={slot}
-                      disabled={booked}
-                      className={`py-2.5 rounded-xl text-sm transition-all border ${
-                        booked
-                          ? 'bg-zinc-100 text-zinc-400 line-through cursor-not-allowed border-transparent'
-                          : 'bg-surface-container-low font-semibold border-transparent hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-100'
-                      }`}
-                    >
-                      {slot}
-                    </button>
-                  )
-                })}
-              </div>
+        {reviews.length > 0 && (
+          <div className="mt-8 mb-8">
+            <h2 className="font-bold text-lg mb-3">Reviews ({reviews.length})</h2>
+            <div className="space-y-3">
+              {reviews.slice(0,5).map(r => (
+                <div key={r.id} className="bg-white rounded-2xl p-4 border border-zinc-100">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                      <span className="material-symbols-outlined text-sm text-indigo-400">person</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm">{r.reviewer.name||'Anonymous'}</p>
+                      <div className="flex">{Array.from({length:5}).map((_,i)=><span key={i} className={'text-xs '+(i<r.rating?'text-amber-400':'text-zinc-200')}>*</span>)}</div>
+                    </div>
+                  </div>
+                  {r.comment && <p className="text-sm text-on-surface-variant">{r.comment}</p>}
+                </div>
+              ))}
             </div>
           </div>
-        </section>
+        )}
       </main>
 
-      {/* Sticky Booking Bar */}
-      <div className="fixed bottom-0 left-0 w-full z-50 px-6 pb-8 pt-4 bg-white/80 backdrop-blur-xl border-t border-zinc-100">
-        <div className="max-w-2xl mx-auto flex items-center justify-between gap-6">
-          <div className="flex flex-col">
-            <span className="text-xs font-bold text-zinc-400 uppercase tracking-tighter">Total Price</span>
-            <span className="text-xl font-extrabold text-on-surface font-headline">
-              ₹500 <span className="text-xs font-normal text-zinc-500">/ session</span>
-            </span>
-          </div>
-          <Link
-            href="/booking/confirm"
-            className="flex-1 bg-gradient-to-r from-secondary to-on-secondary-fixed-variant text-white py-4 px-6 rounded-2xl font-bold shadow-lg shadow-orange-100 flex items-center justify-center gap-2 active:scale-95 transition-transform"
-          >
-            Proceed to Book
-            <span className="material-symbols-outlined">arrow_forward</span>
-          </Link>
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-100 p-4">
+        <div className="max-w-2xl mx-auto">
+          <button onClick={handleBook} disabled={!selectedSlot||!selectedPricingId}
+            className="w-full bg-primary text-white font-bold py-4 rounded-2xl text-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-indigo-700 transition-colors">
+            {!user?'Sign in to Book':!selectedSlot?'Select a Slot':'Book Now'}
+          </button>
         </div>
       </div>
     </div>
