@@ -92,11 +92,12 @@ export default function RegisterExpertPage() {
 
       // Add pricing
       for (const p of pricing) {
-        if (!p.amount) continue
+        const amt = parseFloat(p.amount)
+        if (!p.amount || isNaN(amt) || amt <= 0) continue
         await addExpertPricing(expertId, {
           skillId: p.skillId,
           type: p.type as any,
-          amount: Math.round(parseFloat(p.amount) * 100), // convert to paise
+          amount: Math.round(amt * 100), // convert to paise
           durationMins: parseInt(p.durationMins),
           sessions: p.type === 'package' ? parseInt(p.sessions) : undefined,
         })
@@ -247,8 +248,9 @@ export default function RegisterExpertPage() {
                       </div>
                       <div>
                         <label className="text-xs text-zinc-500">Price (₹)</label>
-                        <input type="number" value={p.amount} onChange={e => updatePricing(p.skillId,'amount',e.target.value)}
-                          placeholder="e.g. 500" className="w-full border border-zinc-200 rounded-xl p-2.5 text-sm mt-1"/>
+                        <input type="number" min="1" value={p.amount} onChange={e => updatePricing(p.skillId,'amount',e.target.value)}
+                          placeholder="e.g. 500" className={'w-full border rounded-xl p-2.5 text-sm mt-1 ' + (p.amount && parseFloat(p.amount) <= 0 ? 'border-red-400' : 'border-zinc-200')}/>
+                        {p.amount && parseFloat(p.amount) <= 0 && <p className="text-red-500 text-xs mt-1">Price must be greater than ₹0</p>}
                       </div>
                       <div>
                         <label className="text-xs text-zinc-500">Duration (min)</label>
@@ -300,6 +302,11 @@ export default function RegisterExpertPage() {
                 + Add Slot
               </button>
             </div>
+            {slots.length === 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
+                <p className="text-amber-700 text-sm">⚠ No slots added yet. Learners won't be able to book you without availability slots.</p>
+              </div>
+            )}
             {slots.length > 0 && (
               <div className="space-y-2">
                 {slots.map((slot, idx) => (

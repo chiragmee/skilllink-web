@@ -13,7 +13,7 @@ export default function ProfilePage() {
   const router = useRouter()
 
   async function handleSignOut() {
-    await signOut()
+    try { await signOut() } catch {}
     router.replace('/login')
   }
 

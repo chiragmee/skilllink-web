@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import TopBar from '@/components/TopBar'
-import { createBooking, initiatePayment } from '@/lib/api'
+import { createBooking, initiatePayment, verifyPayment } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 
 declare global {
@@ -67,8 +67,13 @@ function ConfirmContent() {
         description: `Session with ${expertName}`,
         prefill: { name: user?.name || '', email: user?.email || '' },
         theme: { color: '#4F46E5' },
-        handler: function() {
-          setStep('success')
+        handler: function(response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) {
+          // Verify signature on backend so booking is confirmed without needing webhook
+          verifyPayment({
+            razorpayPaymentId: response.razorpay_payment_id,
+            razorpayOrderId: response.razorpay_order_id,
+            razorpaySignature: response.razorpay_signature,
+          }).catch(console.error).finally(() => setStep('success'))
         },
         modal: {
           ondismiss: function() {

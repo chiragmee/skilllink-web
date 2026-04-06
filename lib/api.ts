@@ -41,7 +41,9 @@ async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
       throw new Error(message)
     }
     if (res.status === 204) return undefined as T
-    return res.json() as Promise<T>
+    const json = await res.json()
+    // Unwrap { success, data } envelope used by all backend endpoints
+    return ('data' in json ? json.data : json) as T
   }
   return attempt()
 }
@@ -172,6 +174,9 @@ export const initiatePayment = (bookingId: string) =>
     '/api/v1/payments/initiate',
     { bookingId },
   )
+
+export const verifyPayment = (data: { razorpayPaymentId: string; razorpayOrderId: string; razorpaySignature: string }) =>
+  api.post<{ bookingId: string }>('/api/v1/payments/verify', data)
 
 // User
 export const getMe = () =>
