@@ -18,6 +18,7 @@ const USER_FRIENDLY_ERRORS: Record<string, string> = {
   BOOKING_FAILED: 'We could not create your booking. The selected slot may no longer be available.',
   PAYMENT_INIT_FAILED: 'We could not start payment right now. Please try again in a few moments.',
   SCRIPT_FAILED: 'Payment gateway could not load. Please check your internet and try again.',
+  EXPERT_ACCEPTANCE_PENDING: 'Your request was sent to the expert. Complete payment once the expert accepts it in My Bookings.',
 }
 
 function ConfirmBookingContent() {
@@ -76,6 +77,9 @@ function ConfirmBookingContent() {
           mode,
         })
         if (!booking?.id) throw new Error('BOOKING_FAILED')
+        if (booking.status === 'requested') {
+          throw new Error('EXPERT_ACCEPTANCE_PENDING')
+        }
         bookingId = booking.id
       }
 
@@ -126,6 +130,10 @@ function ConfirmBookingContent() {
       razorpay.open()
     } catch (error) {
       const code = error instanceof Error ? error.message : 'UNKNOWN'
+      if (code === 'EXPERT_ACCEPTANCE_PENDING') {
+        router.replace('/bookings')
+        return
+      }
       setStep('error')
       setErrorMessage(USER_FRIENDLY_ERRORS[code] || 'Something went wrong while processing payment. Please try again.')
     }

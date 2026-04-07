@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Toast from '@/components/Toast'
-import { acceptBooking, cancelBooking, completeBooking, listBookings, type Booking } from '@/lib/api'
+import { acceptBooking, cancelBooking, completeBooking, listBookings, rejectBooking, type Booking } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 
 const STATUS_BADGE: Record<string, string> = {
@@ -82,7 +82,7 @@ export default function DashboardPage() {
     setSubmittingId(bookingId)
     try {
       if (action === 'accept') await acceptBooking(bookingId)
-      if (action === 'reject') await cancelBooking(bookingId, 'Rejected by expert')
+      if (action === 'reject') await rejectBooking(bookingId)
       if (action === 'complete') await completeBooking(bookingId)
       if (action === 'cancel') await cancelBooking(bookingId, 'Cancelled by expert')
       await fetchBookings()

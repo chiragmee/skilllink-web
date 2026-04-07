@@ -301,6 +301,9 @@ export const listBookings = (role: 'learner' | 'expert') =>
 export const acceptBooking = (id: string) =>
   api.patch(`/api/v1/bookings/${id}/accept`)
 
+export const rejectBooking = (id: string) =>
+  api.patch(`/api/v1/bookings/${id}/reject`)
+
 export const cancelBooking = (id: string, reason?: string) =>
   api.patch(`/api/v1/bookings/${id}/cancel`, { reason })
 

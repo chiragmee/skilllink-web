@@ -71,7 +71,7 @@ export default function BookingsPage() {
   }, [authLoading, loadBookings, router, user])
 
   const filtered = useMemo(() => {
-    if (tab === 'upcoming') return bookings.filter((booking) => ['accepted', 'pending_payment', 'confirmed'].includes(booking.status))
+    if (tab === 'upcoming') return bookings.filter((booking) => ['requested', 'accepted', 'pending_payment', 'confirmed'].includes(booking.status))
     if (tab === 'completed') return bookings.filter((booking) => ['completed', 'cancelled'].includes(booking.status))
     return bookings
   }, [bookings, tab])
@@ -185,7 +185,7 @@ export default function BookingsPage() {
           <div className="grid gap-6 md:grid-cols-2">
             {filtered.map((booking) => {
               const needsPayment = booking.status === 'accepted' || booking.status === 'pending_payment'
-              const canCancel = ['accepted', 'pending_payment', 'confirmed'].includes(booking.status)
+              const canCancel = ['requested', 'accepted', 'pending_payment', 'confirmed'].includes(booking.status)
               const canReview = booking.status === 'completed'
               const statusLabel = STATUS_LABEL[booking.status] ?? booking.status
 
