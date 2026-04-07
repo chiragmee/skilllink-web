@@ -326,7 +326,7 @@ export const submitReview = (data: { bookingId: string; rating: number; comment?
   api.post('/api/v1/reviews', data)
 
 export const getExpertReviews = (expertId: string) =>
-  api.get<Review[]>(`/api/v1/reviews/${expertId}`, { skipAuth: true })
+  api.get<Review[]>(`/api/v1/reviews/experts/${expertId}`, { skipAuth: true })
 
 export async function checkBackendHealth(): Promise<boolean> {
   try {
