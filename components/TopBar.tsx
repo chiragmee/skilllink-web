@@ -1,6 +1,8 @@
 'use client'
 
 import Link from 'next/link'
+import { useState, useRef, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 
 type TopBarProps = {
@@ -22,8 +24,19 @@ export default function TopBar({
   onSearchSubmit,
   searchPlaceholder = 'Search skills or experts',
 }: TopBarProps) {
-  const { user } = useAuth()
+  const { user, signOut } = useAuth()
+  const router = useRouter()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
   const showSearch = variant === 'home' && typeof searchValue === 'string' && !!onSearchChange && !!onSearchSubmit
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
   const resolvedTitle =
     title ?? (variant === 'checkout' ? 'Secure Checkout' : variant === 'back' ? 'SkillLink' : 'SkillLink')
 
@@ -53,18 +66,49 @@ export default function TopBar({
           </div>
         </div>
 
-        <Link
-          href={user ? '/profile' : '/login'}
-          className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-white shadow-card"
-          aria-label={user ? 'Open profile' : 'Open login'}
-        >
-          {user?.avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={user.avatarUrl} alt={user.name ?? 'Profile'} className="h-full w-full object-cover" />
-          ) : (
+        {user ? (
+          <div ref={menuRef} className="relative">
+            <button
+              onClick={() => setMenuOpen((o) => !o)}
+              className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-white shadow-card"
+              aria-label="Open profile menu"
+            >
+              {user.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={user.avatarUrl} alt={user.name ?? 'Profile'} className="h-full w-full object-cover" />
+              ) : (
+                <span className="material-symbols-outlined text-slate-500">person</span>
+              )}
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-12 z-50 min-w-[160px] rounded-2xl border border-slate-200 bg-white py-1 shadow-lg">
+                <Link
+                  href="/profile"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  <span className="material-symbols-outlined text-[18px]">person</span>
+                  Profile
+                </Link>
+                <button
+                  onClick={async () => { setMenuOpen(false); await signOut(); router.replace('/login') }}
+                  className="flex w-full items-center gap-2 px-4 py-3 text-sm text-red-600 hover:bg-red-50"
+                >
+                  <span className="material-symbols-outlined text-[18px]">logout</span>
+                  Sign Out
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <Link
+            href="/login"
+            className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-white shadow-card"
+            aria-label="Open login"
+          >
             <span className="material-symbols-outlined text-slate-500">person</span>
-          )}
-        </Link>
+          </Link>
+        )}
       </div>
 
         {showSearch && (

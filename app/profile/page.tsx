@@ -17,6 +17,7 @@ export default function ProfilePage() {
   async function handleSignOut() {
     try {
       await signOut()
+      router.replace('/login')
     } catch {}
   }
 
