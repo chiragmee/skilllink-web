@@ -298,13 +298,19 @@ export default function ExpertProfilePage() {
                 </div>
               </div>
 
-              <button
-                onClick={handleBookSession}
-                disabled={!selectedPricingId || !selectedSlot}
-                className="mt-5 w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
-              >
-                {!user ? 'Sign in to book' : 'Confirm Booking'}
-              </button>
+              {user?.expertProfileId === expertId ? (
+                <div className="mt-5 rounded-xl bg-slate-100 px-4 py-3 text-center text-sm text-slate-500">
+                  This is your expert profile
+                </div>
+              ) : (
+                <button
+                  onClick={handleBookSession}
+                  disabled={!selectedPricingId || !selectedSlot}
+                  className="mt-5 w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {!user ? 'Sign in to book' : 'Confirm Booking'}
+                </button>
+              )}
               <p className="mt-3 text-center text-xs text-slate-500">Free cancellation up to 24h before session</p>
             </div>
           </aside>

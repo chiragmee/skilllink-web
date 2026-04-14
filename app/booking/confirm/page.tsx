@@ -136,7 +136,7 @@ function ConfirmBookingContent() {
         return
       }
       setStep('error')
-      setErrorMessage(USER_FRIENDLY_ERRORS[code] || 'Something went wrong while processing payment. Please try again.')
+      setErrorMessage(USER_FRIENDLY_ERRORS[code] || code || 'Something went wrong while processing payment. Please try again.')
     }
   }
 
