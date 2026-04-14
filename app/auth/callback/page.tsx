@@ -48,11 +48,24 @@ export default function AuthCallbackPage() {
         window.localStorage.setItem('skilllink_token', authData.accessToken)
         window.localStorage.setItem('skilllink_user', JSON.stringify(authData.user))
 
-        // Return the user to the page they were on when they triggered sign-in
+        // Return the user to the page they were on when they triggered sign-in.
+        // IMPORTANT: use window.location.assign (hard navigation) not router.replace.
+        // AuthProvider lives in the layout and persists across client-side navigations —
+        // its useEffect already ran and won't re-read localStorage without a full reload.
         const returnTo = sessionStorage.getItem('skilllink_return_to')
         sessionStorage.removeItem('skilllink_return_to')
 
-        router.replace(returnTo || (authData.user.expertProfileId ? '/dashboard' : '/'))
+        let redirectPath = authData.user.expertProfileId ? '/dashboard' : '/'
+        if (returnTo) {
+          try {
+            // returnTo is a full URL — extract just the path so we stay on the same origin
+            redirectPath = new URL(returnTo).pathname + new URL(returnTo).search
+          } catch {
+            redirectPath = returnTo
+          }
+        }
+
+        window.location.assign(redirectPath)
       } catch (caughtError) {
         console.error('[AuthCallback] sign-in failed:', caughtError)
         if (!cancelled) {

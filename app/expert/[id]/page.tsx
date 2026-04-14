@@ -159,15 +159,12 @@ export default function ExpertProfilePage() {
               <span>Fitness</span>
             </nav>
           </div>
-          <button
-            onClick={() => {
-              if (!user) { setShowLoginModal(true) }
-              else { document.getElementById('booking-sidebar')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }
-            }}
-            className="rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-white"
-          >
-            Book Now
-          </button>
+          <Link href="/" className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            All Experts
+          </Link>
         </div>
       </header>
 
@@ -194,15 +191,10 @@ export default function ExpertProfilePage() {
                 <span className="text-primary">{expert.city || 'Location not specified'}</span>
               </div>
             </div>
-            <button
-              onClick={() => {
-                if (!user) { setShowLoginModal(true) }
-                else { document.getElementById('booking-sidebar')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }
-              }}
-              className="rounded-xl bg-primary px-7 py-3 text-sm font-semibold text-white"
-            >
-              Book a Session
-            </button>
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2">
+              <span className="h-2 w-2 flex-shrink-0 rounded-full bg-emerald-400" />
+              <span className="text-sm font-medium text-emerald-700">Available for Booking</span>
+            </div>
           </div>
         </section>
 
