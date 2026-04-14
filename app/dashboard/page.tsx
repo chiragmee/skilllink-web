@@ -119,7 +119,10 @@ export default function DashboardPage() {
               <span>Fitness</span>
             </nav>
           </div>
-          <button className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white">Book Now</button>
+          <Link href="/profile" className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900">
+            <span className="material-symbols-outlined text-[18px]">person</span>
+            My Profile
+          </Link>
         </div>
       </header>
 

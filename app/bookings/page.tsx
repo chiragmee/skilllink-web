@@ -139,7 +139,9 @@ export default function BookingsPage() {
               <span>Fitness</span>
             </nav>
           </div>
-          <button className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white">Book Now</button>
+          <Link href="/" className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white">
+            Find Experts
+          </Link>
         </div>
       </header>
 
