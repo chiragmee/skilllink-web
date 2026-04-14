@@ -214,14 +214,26 @@ export default function BookingsPage() {
                   </p>
 
                   <div className="mt-6 flex flex-wrap gap-2">
-                    {needsPayment && (
-                      <Link
-                        href={`/booking/confirm?bookingId=${booking.id}`}
-                        className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white"
-                      >
-                        Complete Payment
-                      </Link>
-                    )}
+                    {needsPayment && (() => {
+                      const params = new URLSearchParams({
+                        bookingId: booking.id,
+                        expertName: booking.expert?.user.name ?? 'Expert',
+                        amount: String(booking.pricing?.amount ?? 0),
+                        duration: String(booking.pricing?.durationMins ?? 60),
+                        date: booking.slotDate,
+                        start: booking.slotStart,
+                        end: booking.slotEnd,
+                        mode: booking.mode,
+                      })
+                      return (
+                        <Link
+                          href={`/booking/confirm?${params.toString()}`}
+                          className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white"
+                        >
+                          Complete Payment
+                        </Link>
+                      )
+                    })()}
                     {canReview && (
                       <button
                         onClick={() => {

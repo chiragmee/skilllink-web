@@ -43,7 +43,7 @@ const DAYS = [
 
 export default function RegisterExpertPage() {
   const router = useRouter()
-  const { user, loading } = useAuth()
+  const { user, loading, refreshUser } = useAuth()
 
   const [step, setStep] = useState(1)
   const [categories, setCategories] = useState<SkillCategory[]>([])
@@ -186,6 +186,7 @@ export default function RegisterExpertPage() {
         expertProfileId: expertId,
       }
       localStorage.setItem('skilllink_user', JSON.stringify(updatedUser))
+      await refreshUser()
 
       router.replace('/dashboard')
     } catch {

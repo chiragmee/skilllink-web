@@ -32,7 +32,8 @@ function ConfirmBookingContent() {
   const date = params.get('date') ?? ''
   const start = params.get('start') ?? ''
   const end = params.get('end') ?? ''
-  const mode = params.get('mode') ?? 'online'
+  const rawMode = params.get('mode') ?? 'online'
+  const mode = rawMode === 'both' ? 'online' : rawMode
   const expertName = params.get('expertName') ?? 'Expert'
   const amount = Number(params.get('amount') ?? '0')
   const duration = Number(params.get('duration') ?? '60')

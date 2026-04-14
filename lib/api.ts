@@ -298,6 +298,9 @@ export const createBooking = (data: {
 export const listBookings = (role: 'learner' | 'expert') =>
   api.get<Booking[]>(`/api/v1/bookings?role=${role}`)
 
+export const getBooking = (id: string) =>
+  api.get<Booking>(`/api/v1/bookings/${id}`)
+
 export const acceptBooking = (id: string) =>
   api.patch(`/api/v1/bookings/${id}/accept`)
 
