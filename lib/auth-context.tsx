@@ -17,6 +17,7 @@ interface AuthContextValue {
   loading: boolean
   signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
+  refreshUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -24,6 +25,7 @@ const AuthContext = createContext<AuthContextValue>({
   loading: true,
   signInWithGoogle: async () => {},
   signOut: async () => {},
+  refreshUser: async () => {},
 })
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -68,6 +70,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.location.assign(data.url)
   }
 
+  async function refreshUser() {
+    const token = window.localStorage.getItem('skilllink_token')
+    if (!token) return
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return
+      const { data } = await res.json()
+      const updated: AuthUser = {
+        id: data.id,
+        name: data.name,
+        email: data.email,
+        avatarUrl: data.avatarUrl,
+        role: data.role,
+        expertProfileId: data.expertProfile?.id ?? null,
+      }
+      window.localStorage.setItem('skilllink_user', JSON.stringify(updated))
+      setUser(updated)
+    } catch {}
+  }
+
   async function signOut() {
     window.localStorage.removeItem('skilllink_token')
     window.localStorage.removeItem('skilllink_user')
@@ -81,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )
