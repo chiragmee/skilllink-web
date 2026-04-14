@@ -29,7 +29,7 @@ const WEEKDAY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 export default function ExpertProfilePage() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const expertId = params.id
   const [expert, setExpert] = useState<Expert | null>(null)
   const [reviews, setReviews] = useState<Review[]>([])
@@ -69,6 +69,9 @@ export default function ExpertProfilePage() {
   }, [expertId])
 
   useEffect(() => {
+    // Only fetch slots once the user is authenticated — avoids wasted calls
+    // and also auto-triggers when the user returns from OAuth (user goes null → value)
+    if (!user) return
     let mounted = true
     async function loadSlots() {
       setSlotsLoading(true)
@@ -91,7 +94,7 @@ export default function ExpertProfilePage() {
     return () => {
       mounted = false
     }
-  }, [expertId, selectedDate])
+  }, [expertId, selectedDate, user])
 
   function handleBookSession() {
     if (!user) {
@@ -157,7 +160,10 @@ export default function ExpertProfilePage() {
             </nav>
           </div>
           <button
-            onClick={handleBookSession}
+            onClick={() => {
+              if (!user) { setShowLoginModal(true) }
+              else { document.getElementById('booking-sidebar')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }
+            }}
             className="rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-white"
           >
             Book Now
@@ -188,7 +194,15 @@ export default function ExpertProfilePage() {
                 <span className="text-primary">{expert.city || 'Location not specified'}</span>
               </div>
             </div>
-            <button onClick={handleBookSession} className="rounded-xl bg-primary px-7 py-3 text-sm font-semibold text-white">Book a Session</button>
+            <button
+              onClick={() => {
+                if (!user) { setShowLoginModal(true) }
+                else { document.getElementById('booking-sidebar')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }
+              }}
+              className="rounded-xl bg-primary px-7 py-3 text-sm font-semibold text-white"
+            >
+              Book a Session
+            </button>
           </div>
         </section>
 
@@ -260,71 +274,155 @@ export default function ExpertProfilePage() {
           </div>
 
           <aside className="lg:col-span-4">
-            <div className="sticky top-24 rounded-2xl bg-white p-6 shadow-[0_20px_40px_rgba(25,28,29,0.06)]">
-              <h3 className="text-xl font-bold">Check Availability</h3>
-              <div className="mt-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="text-sm font-semibold">Upcoming Days</span>
-                </div>
-                <div className="grid grid-cols-7 gap-1 text-center">
-                  {dateOptions.slice(0, 14).map((date) => {
-                    const key = toDateKey(date)
-                    const active = selectedDate === key
-                    return (
-                      <button
-                        key={key}
-                        onClick={() => setSelectedDate(key)}
-                        className={`rounded-md py-1 text-[11px] ${active ? 'bg-primary text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-                      >
-                        {WEEKDAY[date.getDay() === 0 ? 6 : date.getDay() - 1].slice(0, 1)}
-                        <br />
-                        {date.getDate()}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
+            <div id="booking-sidebar" className="sticky top-24 rounded-2xl bg-white p-6 shadow-[0_20px_40px_rgba(25,28,29,0.06)]">
 
-              <div className="mt-5">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Available Slots</p>
-                {slotsLoading && <p className="text-sm text-slate-500">Loading slots...</p>}
-                {!slotsLoading && slotsError && <p className="text-sm text-red-600">{slotsError}</p>}
-                {!slotsLoading && !slotsError && slots.length === 0 && <p className="text-sm text-slate-500">No slots available.</p>}
-                <div className="space-y-2">
-                  {!slotsLoading &&
-                    !slotsError &&
-                    slots.map((slot, index) => {
-                      const key = `${slot.startTime}-${slot.endTime}-${index}`
-                      const active = selectedSlot?.startTime === slot.startTime && selectedSlot?.endTime === slot.endTime
-                      return (
-                        <button
-                          key={key}
-                          onClick={() => setSelectedSlot({ startTime: slot.startTime, endTime: slot.endTime })}
-                          className={`w-full rounded-lg border px-3 py-2 text-sm font-semibold ${
-                            active ? 'border-primary bg-primary text-white' : 'border-slate-200 text-slate-700'
-                          }`}
-                        >
-                          {slot.startTime} - {slot.endTime}
-                        </button>
-                      )
-                    })}
+              {/* ── Auth loading: skeleton ── */}
+              {authLoading && (
+                <div className="animate-pulse space-y-4">
+                  <div className="h-6 w-36 rounded-lg bg-slate-200" />
+                  <div className="h-4 w-full rounded bg-slate-200" />
+                  <div className="space-y-2">
+                    <div className="h-14 w-full rounded-xl bg-slate-200" />
+                    <div className="h-14 w-full rounded-xl bg-slate-200" />
+                  </div>
+                  <div className="h-12 w-full rounded-xl bg-slate-200" />
                 </div>
-              </div>
+              )}
 
-              {user?.expertProfileId === expertId ? (
-                <div className="mt-5 rounded-xl bg-slate-100 px-4 py-3 text-center text-sm text-slate-500">
+              {/* ── Own profile ── */}
+              {!authLoading && user?.expertProfileId === expertId && (
+                <div className="rounded-xl bg-slate-100 px-4 py-3 text-center text-sm text-slate-500">
                   This is your expert profile
                 </div>
-              ) : (
-                <button
-                  onClick={handleBookSession}
-                  disabled={!selectedPricingId || !selectedSlot}
-                  className="mt-5 w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
-                >
-                  {!user ? 'Sign in to book' : 'Confirm Booking'}
-                </button>
               )}
-              <p className="mt-3 text-center text-xs text-slate-500">Free cancellation up to 24h before session</p>
+
+              {/* ── STEP 1: Not logged in — pricing preview + single Login CTA ── */}
+              {!authLoading && !user && (
+                <>
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">1</span>
+                    <h3 className="text-lg font-bold">Book a Session</h3>
+                  </div>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Sign in first, then choose a date and time that works for you.
+                  </p>
+
+                  {/* Pricing preview */}
+                  {expert.pricing.length > 0 && (
+                    <div className="mt-5 space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Session Pricing</p>
+                      {expert.pricing.map((pricing) => (
+                        <div key={pricing.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800">
+                              {pricing.type === 'package' ? 'Package' : 'Single Session'}
+                            </p>
+                            <p className="text-xs text-slate-500">{pricing.durationMins} min</p>
+                          </div>
+                          <p className="text-base font-bold text-primary">
+                            Rs {(pricing.amount / 100).toLocaleString('en-IN')}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => setShowLoginModal(true)}
+                    className="mt-6 w-full rounded-xl bg-primary px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-primary/90"
+                  >
+                    Login to Book
+                  </button>
+                  <p className="mt-3 text-center text-xs text-slate-500">
+                    Free cancellation up to 24 h before session
+                  </p>
+                </>
+              )}
+
+              {/* ── STEP 2: Logged in — date + slot picker + confirm ── */}
+              {!authLoading && user && user.expertProfileId !== expertId && (
+                <>
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">2</span>
+                    <h3 className="text-lg font-bold">Pick a Slot</h3>
+                  </div>
+
+                  <div className="mt-4">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Upcoming Days</p>
+                    <div className="grid grid-cols-7 gap-1 text-center">
+                      {dateOptions.slice(0, 14).map((date) => {
+                        const key = toDateKey(date)
+                        const active = selectedDate === key
+                        return (
+                          <button
+                            key={key}
+                            onClick={() => setSelectedDate(key)}
+                            className={`rounded-md py-1 text-[11px] transition ${
+                              active ? 'bg-primary text-white' : 'text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            {WEEKDAY[date.getDay() === 0 ? 6 : date.getDay() - 1].slice(0, 1)}
+                            <br />
+                            {date.getDate()}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="mt-5">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Available Slots</p>
+                    {slotsLoading && (
+                      <div className="space-y-2">
+                        {[1, 2, 3].map((i) => (
+                          <div key={i} className="h-9 w-full animate-pulse rounded-lg bg-slate-100" />
+                        ))}
+                      </div>
+                    )}
+                    {!slotsLoading && slotsError && (
+                      <p className="text-sm text-red-600">{slotsError}</p>
+                    )}
+                    {!slotsLoading && !slotsError && slots.length === 0 && (
+                      <p className="text-sm text-slate-500">No slots available for this date.</p>
+                    )}
+                    <div className="space-y-2">
+                      {!slotsLoading &&
+                        !slotsError &&
+                        slots.map((slot, index) => {
+                          const key = `${slot.startTime}-${slot.endTime}-${index}`
+                          const active =
+                            selectedSlot?.startTime === slot.startTime &&
+                            selectedSlot?.endTime === slot.endTime
+                          return (
+                            <button
+                              key={key}
+                              onClick={() => setSelectedSlot({ startTime: slot.startTime, endTime: slot.endTime })}
+                              className={`w-full rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                                active
+                                  ? 'border-primary bg-primary text-white'
+                                  : 'border-slate-200 text-slate-700 hover:border-primary/40 hover:bg-indigo-50'
+                              }`}
+                            >
+                              {slot.startTime} – {slot.endTime}
+                            </button>
+                          )
+                        })}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleBookSession}
+                    disabled={!selectedPricingId || !selectedSlot}
+                    className="mt-5 w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {selectedSlot ? 'Confirm Booking' : 'Select a Slot to Continue'}
+                  </button>
+                  <p className="mt-3 text-center text-xs text-slate-500">
+                    Free cancellation up to 24 h before session
+                  </p>
+                </>
+              )}
+
             </div>
           </aside>
         </div>
