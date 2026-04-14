@@ -12,6 +12,7 @@ import {
   type Review,
 } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
+import LoginModal from '@/components/LoginModal'
 
 function toDateKey(date: Date) {
   return date.toISOString().split('T')[0]
@@ -40,6 +41,7 @@ export default function ExpertProfilePage() {
   const [slots, setSlots] = useState<AvailabilitySlot[]>([])
   const [slotsLoading, setSlotsLoading] = useState(false)
   const [slotsError, setSlotsError] = useState('')
+  const [showLoginModal, setShowLoginModal] = useState(false)
 
   const dateOptions = useMemo(() => Array.from({ length: 14 }, (_, index) => addDays(new Date(), index)), [])
 
@@ -93,7 +95,7 @@ export default function ExpertProfilePage() {
 
   function handleBookSession() {
     if (!user) {
-      router.push('/login')
+      setShowLoginModal(true)
       return
     }
     if (!expert || !selectedPricingId || !selectedSlot) return
@@ -137,6 +139,12 @@ export default function ExpertProfilePage() {
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-slate-900">
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        context={expert ? `Sign in to book a session with ${expert.user.name ?? 'this expert'}.` : undefined}
+      />
+
       <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/85 backdrop-blur-xl">
         <div className="mx-auto flex w-full max-w-[1280px] items-center justify-between px-4 py-3 sm:px-6">
           <div className="flex items-center gap-7">
@@ -148,7 +156,12 @@ export default function ExpertProfilePage() {
               <span>Fitness</span>
             </nav>
           </div>
-          <button className="rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-white">Book Now</button>
+          <button
+            onClick={handleBookSession}
+            className="rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-white"
+          >
+            Book Now
+          </button>
         </div>
       </header>
 
@@ -175,7 +188,7 @@ export default function ExpertProfilePage() {
                 <span className="text-primary">{expert.city || 'Location not specified'}</span>
               </div>
             </div>
-            <button className="rounded-xl bg-primary px-7 py-3 text-sm font-semibold text-white">Book a Session</button>
+            <button onClick={handleBookSession} className="rounded-xl bg-primary px-7 py-3 text-sm font-semibold text-white">Book a Session</button>
           </div>
         </section>
 

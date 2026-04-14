@@ -48,7 +48,11 @@ export default function AuthCallbackPage() {
         window.localStorage.setItem('skilllink_token', authData.accessToken)
         window.localStorage.setItem('skilllink_user', JSON.stringify(authData.user))
 
-        router.replace(authData.user.expertProfileId ? '/dashboard' : '/')
+        // Return the user to the page they were on when they triggered sign-in
+        const returnTo = sessionStorage.getItem('skilllink_return_to')
+        sessionStorage.removeItem('skilllink_return_to')
+
+        router.replace(returnTo || (authData.user.expertProfileId ? '/dashboard' : '/'))
       } catch (caughtError) {
         console.error('[AuthCallback] sign-in failed:', caughtError)
         if (!cancelled) {

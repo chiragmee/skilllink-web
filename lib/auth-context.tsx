@@ -100,7 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await supabase.auth.signOut()
     } finally {
-      window.location.assign('/login')
+      window.location.assign('/')
     }
   }
 

@@ -24,7 +24,7 @@ export default function TopBar({
   onSearchSubmit,
   searchPlaceholder = 'Search skills or experts',
 }: TopBarProps) {
-  const { user, signOut } = useAuth()
+  const { user, loading, signOut } = useAuth()
   const router = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -66,7 +66,9 @@ export default function TopBar({
           </div>
         </div>
 
-        {user ? (
+        {loading ? (
+          <div className="h-10 w-10 animate-pulse rounded-full bg-slate-200" aria-hidden="true" />
+        ) : user ? (
           <div ref={menuRef} className="relative">
             <button
               onClick={() => setMenuOpen((o) => !o)}
@@ -91,7 +93,7 @@ export default function TopBar({
                   Profile
                 </Link>
                 <button
-                  onClick={async () => { setMenuOpen(false); await signOut(); router.replace('/login') }}
+                  onClick={async () => { setMenuOpen(false); await signOut() }}
                   className="flex w-full items-center gap-2 px-4 py-3 text-sm text-red-600 hover:bg-red-50"
                 >
                   <span className="material-symbols-outlined text-[18px]">logout</span>
@@ -104,7 +106,7 @@ export default function TopBar({
           <Link
             href="/login"
             className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-white shadow-card"
-            aria-label="Open login"
+            aria-label="Sign in"
           >
             <span className="material-symbols-outlined text-slate-500">person</span>
           </Link>
